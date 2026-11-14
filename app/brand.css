@@ -1,0 +1,53 @@
+/* ============================================================
+   ReplyQuick brand tokens (PLACEHOLDER)
+   Replace this whole file with the brand.css from the branding chat.
+   Every dashboard reads only these variables, so swapping this file
+   rebrands the entire app.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+:root {
+  /* Core colors */
+  --rq-primary: #13213a;        /* deep navy: sidebars, headers */
+  --rq-primary-ink: #ffffff;    /* text on primary */
+  --rq-accent: #0f8b7e;         /* teal: buttons, highlights */
+  --rq-accent-hover: #0c7369;
+  --rq-accent-soft: #e3f4f1;
+
+  /* Neutrals */
+  --rq-bg: #f4f6f9;
+  --rq-surface: #ffffff;
+  --rq-surface-2: #f1f4f8;
+  --rq-border: #e1e6ee;
+  --rq-text: #16202f;
+  --rq-text-muted: #5f6b7d;
+
+  /* Status colors */
+  --rq-success: #1f9d55;
+  --rq-success-soft: #e3f6ea;
+  --rq-warning: #d98a00;
+  --rq-warning-soft: #fdf2dc;
+  --rq-danger: #d23b3b;
+  --rq-danger-soft: #fbe6e6;
+  --rq-info: #2f6fd6;
+  --rq-info-soft: #e5eefc;
+  --rq-neutral-soft: #eceff4;
+
+  /* Type */
+  --rq-font-heading: 'Space Grotesk', system-ui, sans-serif;
+  --rq-font-body: 'Inter', system-ui, sans-serif;
+  --rq-font-numbers: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+
+  /* Shape and spacing */
+  --rq-radius-sm: 8px;
+  --rq-radius: 12px;
+  --rq-radius-lg: 18px;
+  --rq-shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 2px 8px rgba(16, 24, 40, 0.04);
+  --rq-shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.16);
+  --rq-space-1: 4px;
+  --rq-space-2: 8px;
+  --rq-space-3: 12px;
+  --rq-space-4: 16px;
+  --rq-space-5: 24px;
+  --rq-space-6: 32px;
+}
