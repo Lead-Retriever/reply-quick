@@ -6,7 +6,7 @@
 // only call these functions, so they will not need to change.
 // ============================================================
 
-const KEY = 'rq_demo_v1';
+const KEY = 'rq_demo_v2';
 const listeners = new Set();
 
 // ---------- Seeded random so demo data looks the same each reset ----------
@@ -96,58 +96,52 @@ function seed() {
     ...agents.map(a => ({ id: 'u_' + a.id, email: a.email, password: 'demo', name: a.name, role: 'receptionist', agentId: a.id })),
   ];
 
-  // ---------- Generate call history ----------
+  // ---------- Generate 30 days of call history (every call answered) ----------
   const r = rng(42);
   const pick = (arr) => arr[Math.floor(r() * arr.length)];
   const first = ['James', 'Ana', 'Robert', 'Keisha', 'Michael', 'Laura', 'David', 'Carmen', 'Chris', 'Tanya', 'Brian', 'Sofia', 'Kevin', 'Megan', 'Luis', 'Rachel'];
   const last = ['Smith', 'Garcia', 'Johnson', 'Brown', 'Martinez', 'Davis', 'Lopez', 'Wilson', 'Nguyen', 'Taylor', 'Hernandez', 'Clark'];
   const reasons = {
-    firm_morgan: ['Car accident last week, wants a consultation', 'Slip and fall at a grocery store', 'Existing client asking for case update', 'Insurance adjuster calling about a claim', 'Work injury, employer denied claim'],
-    firm_rivera: ['Wants to file for divorce', 'Custody schedule question, existing client', 'Child support modification', 'Opposing counsel returning call', 'Prenup consultation'],
-    firm_chen: ['Son was arrested last night', 'DUI charge, court date next week', 'Existing client, needs to reschedule', 'Question about expungement', 'Bail hearing question'],
+    firm_morgan: ['Car accident last week, wants a consultation', 'Slip and fall at a grocery store', 'Existing client asking for case update', 'Insurance adjuster calling about a claim', 'Work injury, employer denied claim', 'Rear-ended on I-95, neck pain'],
+    firm_rivera: ['Wants to file for divorce', 'Custody schedule question, existing client', 'Child support modification', 'Opposing counsel returning call', 'Prenup consultation', 'Spouse served divorce papers'],
+    firm_chen: ['Son was arrested last night', 'DUI charge, court date next week', 'Existing client, needs to reschedule', 'Question about expungement', 'Bail hearing question', 'Charged with possession'],
   };
+  // Typical fee per retained client, used for demo revenue.
+  const FEE = { firm_morgan: [6000, 30000], firm_rivera: [3500, 9000], firm_chen: [2500, 12000] };
   const agentNames = agents.map(a => a.name);
   const calls = [];
   const tasks = [];
   const now = Date.now();
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < 190; i++) {
     const firm = pick(firms);
-    const started = now - Math.floor(r() * 3 * DAY);
-    const roll = r();
-    const status = roll < 0.95 ? 'answered' : 'abandoned';
+    const started = now - Math.floor(r() * 30 * DAY);
     const reason = pick(reasons[firm.id]);
     const callerType = /existing/i.test(reason) ? 'Existing client' : /counsel|adjuster/i.test(reason) ? 'Other' : 'New inquiry';
-    const outRoll = r();
-    let outcome = 'Message taken';
-    let transfer = null;
-    if (status === 'answered') {
-      if (callerType === 'New inquiry') outcome = outRoll < 0.55 ? 'Intake complete' : outRoll < 0.8 ? 'Transferred' : 'Callback requested';
-      else outcome = outRoll < 0.5 ? 'Message taken' : outRoll < 0.8 ? 'Transferred' : 'Callback requested';
-      if (outcome === 'Transferred') {
-        const c = pick(firm.directory);
-        transfer = { to: c.name, type: r() < 0.6 ? 'warm' : 'blind', result: r() < 0.88 ? 'accepted' : 'failed' };
-        if (transfer.result === 'failed') outcome = 'Message taken';
-      }
+    const o = r();
+    let outcome, stage = null, revenue = 0, transfer = null, consultAt = null;
+    if (callerType === 'New inquiry') {
+      outcome = o < 0.45 ? 'Consultation booked' : o < 0.75 ? 'Transferred' : 'Intake complete';
+      if (outcome === 'Consultation booked') consultAt = started + (1 + Math.floor(r() * 4)) * DAY;
+      const s = r();
+      if (outcome === 'Intake complete') stage = s < 0.3 ? 'not_fit' : 'inquiry';
+      else stage = s < 0.45 ? 'retained' : s < 0.85 ? 'consult' : 'not_fit';
+      if (stage === 'retained') { const [lo, hi] = FEE[firm.id]; revenue = Math.round((lo + r() * (hi - lo)) / 250) * 250; }
+    } else {
+      outcome = o < 0.55 ? 'Message taken' : 'Transferred';
     }
-    const call = {
+    if (outcome === 'Transferred') transfer = { to: pick(firm.directory).name, type: r() < 0.6 ? 'warm' : 'blind', result: 'accepted' };
+    calls.push({
       id: 'call_' + (1000 + i), firmId: firm.id,
-      callerName: status === 'answered' ? pick(first) + ' ' + pick(last) : '',
+      callerName: pick(first) + ' ' + pick(last),
       callerPhone: '+1' + Math.floor(2000000000 + r() * 7000000000),
-      startedAt: started, waitSec: status === 'answered' ? 2 + Math.floor(r() * 14) : 20 + Math.floor(r() * 40),
-      durationSec: status === 'answered' ? 60 + Math.floor(r() * 360) : 0,
-      agent: status === 'answered' ? pick(agentNames) : '',
-      status, callerType: status === 'answered' ? callerType : '', reason: status === 'answered' ? reason : 'Caller hung up before answer',
-      notes: status === 'answered' ? 'Caller was polite. Best time to reach: afternoons.' : '',
-      outcome: status === 'answered' ? outcome : 'Abandoned', transfer, intake: null,
-    };
-    calls.push(call);
-    if (outcome === 'Callback requested') {
-      tasks.push({ id: 'task_' + i, firmId: firm.id, callId: call.id, title: 'Call back ' + call.callerName, detail: reason, due: started + DAY, done: r() < 0.4, createdAt: started });
-    }
+      startedAt: started, waitSec: 2 + Math.floor(r() * 12), durationSec: 60 + Math.floor(r() * 360),
+      agent: pick(agentNames), status: 'answered', callerType, reason,
+      notes: 'Caller was polite. Best time to reach: afternoons.',
+      outcome, transfer, consultAt, stage, revenue,
+    });
   }
   calls.sort((a, b) => b.startedAt - a.startedAt);
-
-  return { version: 1, firms, agents, users, calls, tasks, audit: [], onboardingDrafts: [] };
+  return { version: 2, firms, agents, users, calls, tasks, audit: [], onboardingDrafts: [] };
 }
 
 // ---------- Persistence ----------
@@ -216,6 +210,10 @@ export function setAgentStatus(agentId, status) {
   else if (!a.shiftStart) a.shiftStart = Date.now();
   save();
 }
+export function updateCall(id, patch) {
+  const c = state.calls.find(x => x.id === id); if (!c) return;
+  Object.assign(c, patch); save();
+}
 export function logCall(call) { state.calls.unshift(call); save(); }
 export function addTask(task) { state.tasks.unshift(task); save(); }
 export function toggleTask(id) { const t = state.tasks.find(x => x.id === id); if (t) { t.done = !t.done; save(); } }
@@ -269,15 +267,17 @@ export function fmtShift(sec) { sec = Math.max(0, Math.round(sec || 0)); return 
 export function fmtDur(sec) { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + ':' + pad(sec % 60); }
 export function isToday(ts) { return new Date(ts).toDateString() === new Date().toDateString(); }
 
-// Is the firm's office open right now (in the firm's own time zone)?
-export function officeOpenNow(firm) {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: firm.timezone, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+// Is the firm's office open at a given moment (in the firm's own time zone)?
+export function officeOpenAt(firm, when) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: firm.timezone, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(when));
   const get = (t) => (parts.find(p => p.type === t) || {}).value;
   const day = get('weekday').toLowerCase().slice(0, 3);
   const hm = get('hour').replace('24', '00') + ':' + get('minute');
   const h = firm.hours[day];
   return !!(h && hm >= h.open && hm < h.close);
 }
+export function officeOpenNow(firm) { return officeOpenAt(firm, Date.now()); }
+export function fmtMoney(n) { return '$' + Math.round(n || 0).toLocaleString('en-US'); }
 export function firmLocalTime(firm) {
   return new Intl.DateTimeFormat('en-US', { timeZone: firm.timezone, weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date());
 }

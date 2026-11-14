@@ -8,7 +8,7 @@ import * as S from '../store.js';
 import { esc, toast, STATUS_LABEL, outcomePill } from '../ui.js';
 
 const CALLERS = ['James Carter', 'Ana Morales', 'Unknown caller', 'Keisha Brown', 'Unknown caller', 'Luis Ortega', 'Megan Walsh'];
-const DISPOSITIONS = ['Intake complete', 'Message taken', 'Transferred', 'Callback requested', 'Wrong number / spam'];
+const DISPOSITIONS = ['Consultation booked', 'Intake complete', 'Transferred', 'Message taken', 'Wrong number / spam'];
 
 export function mount(root) {
   const user = S.currentUser();
@@ -72,7 +72,7 @@ export function mount(root) {
       startedAt: Date.now(), muted: false, held: false, transfer: null, transferLog: [],
       known,
       form: { callerName: known ? known.callerName : '', callback: S.fmtPhone(inc.phone), callerType: known ? 'Existing client' : 'New inquiry', reason: '', notes: '' },
-      wrap: { outcome: 'Message taken', makeTask: false, due: '' },
+      wrap: { outcome: 'Message taken', consultAt: '' },
     };
     desk.incoming = null; desk.phase = 'on_call';
     S.setAgentStatus(agent.id, 'on_call');
@@ -99,11 +99,11 @@ export function mount(root) {
       callerType: c.form.callerType, reason: c.form.reason, notes: c.form.notes, outcome: c.wrap.outcome,
       transfer: lastTransfer ? { to: lastTransfer.to, type: lastTransfer.type, result: lastTransfer.result } : null,
       transferAttempts: c.transferLog,
+      consultAt: c.wrap.outcome === 'Consultation booked' && c.wrap.consultAt ? new Date(c.wrap.consultAt).getTime() : null,
+      stage: c.form.callerType === 'New inquiry' ? (c.wrap.outcome === 'Consultation booked' ? 'consult' : 'inquiry') : null,
+      revenue: 0,
     };
     S.logCall(record);
-    if (c.wrap.makeTask || c.wrap.outcome === 'Callback requested') {
-      S.addTask({ id: S.uid('task'), firmId: c.firmId, callId: c.id, title: 'Call back ' + record.callerName, detail: c.form.reason || c.form.notes, due: c.wrap.due ? new Date(c.wrap.due).getTime() : Date.now() + 86400000, done: false, createdAt: Date.now() });
-    }
     toast('Call saved to ' + S.getFirm(c.firmId).name + "'s dashboard");
     desk.call = null; desk.phase = 'idle';
     S.setAgentStatus(agent.id, 'available');
@@ -200,7 +200,7 @@ export function mount(root) {
         ${firm.instructions ? `<div class="greeting-box" style="font-size:13.5px;font-weight:400;margin-top:0">${esc(firm.instructions)}</div>` : ''}
         <div class="form-grid">
           <label class="field"><span>Caller name</span><input type="text" data-f="callerName" value="${esc(c.form.callerName)}" /></label>
-          <label class="field"><span>Callback number</span><input type="tel" data-f="callback" value="${esc(c.form.callback)}" /></label>
+          <label class="field"><span>Best number to reach them</span><input type="tel" data-f="callback" value="${esc(c.form.callback)}" /></label>
           <label class="field"><span>Caller type</span><select data-f="callerType">${['New inquiry', 'Existing client', 'Other'].map(o => `<option ${c.form.callerType === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
           <label class="field"><span>Reason for calling</span><input type="text" data-f="reason" value="${esc(c.form.reason)}" /></label>
           <label class="field full"><span>Notes</span><textarea data-f="notes">${esc(c.form.notes)}</textarea></label>
@@ -215,8 +215,7 @@ export function mount(root) {
         <p class="muted" style="margin-top:0">${esc(c.form.callerName || 'Unknown caller')} · ${esc(c.form.callback)} · ${S.fmtDur((c.endedAt - c.startedAt) / 1000)}</p>
         <div class="form-grid">
           <label class="field"><span>Outcome</span><select data-w="outcome">${DISPOSITIONS.map(o => `<option ${c.wrap.outcome === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
-          <label class="field"><span>Callback due (optional)</span><input type="datetime-local" data-w="due" value="${esc(c.wrap.due)}" /></label>
-          <label class="check full"><input type="checkbox" data-w="makeTask" ${c.wrap.makeTask ? 'checked' : ''}/> Create a callback task for the firm</label>
+          ${c.wrap.outcome === 'Consultation booked' ? `<label class="field"><span>Consultation date and time</span><input type="datetime-local" data-w="consultAt" value="${esc(c.wrap.consultAt)}" /></label>` : '<div></div>'}
           <label class="field full"><span>Final notes for the firm</span><textarea data-f="notes">${esc(c.form.notes)}</textarea></label>
         </div>
         <div class="btn-row" style="margin-top:16px"><button class="btn primary lg" data-do="save">Save and go available</button></div>
@@ -317,7 +316,7 @@ export function mount(root) {
     const el = e.target;
     if (el.id === 'statusSel') { S.setAgentStatus(agent.id, el.value); nextFromQueue(); render(); }
     if (el.id === 'autoSim') { desk.auto = el.checked; scheduleAuto(); }
-    if (el.dataset.w === 'outcome') { desk.call.wrap.outcome = el.value; if (el.value === 'Callback requested') { desk.call.wrap.makeTask = true; render(); } }
+    if (el.dataset.w === 'outcome') { desk.call.wrap.outcome = el.value; render(); }
     onInput(e);
   }
   function scheduleAuto() {

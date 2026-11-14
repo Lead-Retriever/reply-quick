@@ -37,8 +37,8 @@ const STATUS_PILL = { available: 'success', ringing: 'info', on_call: 'danger', 
 export const statusPill = (s) => '<span class="pill ' + (STATUS_PILL[s] || '') + '">' + esc(STATUS_LABEL[s] || s) + '</span>';
 
 const OUTCOME_PILL = {
-  'Intake complete': 'success', 'Transferred': 'info', 'Callback requested': 'warning',
-  'Message taken': 'accent', 'Abandoned': 'danger', 'Missed': 'danger',
+  'Consultation booked': 'success', 'Intake complete': 'info', 'Transferred': 'accent', 'Callback requested': 'warning',
+  'Message taken': '', 'Abandoned': 'danger', 'Missed': 'danger',
 };
 export const outcomePill = (o) => '<span class="pill ' + (OUTCOME_PILL[o] || '') + '">' + esc(o) + '</span>';
 

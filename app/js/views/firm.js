@@ -9,7 +9,6 @@ import { callsTable, callFilters, applyFilters, openCall, summarize } from './co
 const NAV = [
   { href: '#/firm/overview', text: 'Overview' },
   { href: '#/firm/calls', text: 'Calls' },
-  { href: '#/firm/callbacks', text: 'Callbacks' },
   { href: '#/firm/settings', text: 'Settings' },
 ];
 
@@ -21,57 +20,60 @@ export function mount(root, args) {
   function render() {
     const firm = S.getFirm(firmId);
     if (!firm) { root.innerHTML = '<div class="main"><div class="card">This login is not linked to a firm. Contact ReplyQuick support.</div></div>'; return; }
-    const pages = { overview, calls, callbacks, settings };
+    const pages = { overview, calls, settings };
     const p = (pages[page] || overview)(firm);
     root.innerHTML = shell({ nav: NAV, active: '#/firm/' + page, title: p.title, subtitle: p.subtitle, body: p.body, actions: p.actions || '' });
     if (p.after) p.after();
   }
 
-  // ---------- Overview ----------
+  // ---------- Overview: the pipeline ----------
+  let range = '30';
   function overview(firm) {
-    const calls = S.getCalls(firmId);
-    const today = calls.filter(c => S.isToday(c.startedAt));
-    const week = calls.filter(c => c.startedAt > Date.now() - 7 * 86400000);
-    const s = summarize(week);
-    const tasks = S.getTasks(firmId).filter(t => !t.done);
+    const all = S.getCalls(firmId);
+    const days = Number(range);
+    const calls = days ? all.filter(c => c.startedAt > Date.now() - days * 86400000) : all;
+    const s = summarize(calls);
+    const afterHours = calls.filter(c => !S.officeOpenAt(firm, c.startedAt)).length;
+    const pct = (a, b) => b ? Math.round((a / b) * 100) + '%' : '0%';
+    const stages = [
+      { label: 'Calls answered', value: s.answered, sub: '100% picked up by a live receptionist' },
+      { label: 'New leads', value: s.newInquiries, conv: pct(s.newInquiries, s.answered) + ' of calls' },
+      { label: 'Consultations', value: s.consults, conv: pct(s.consults, s.newInquiries) + ' of leads' },
+      { label: 'Retained clients', value: s.retained, conv: pct(s.retained, s.consults) + ' of consultations' },
+      { label: 'Revenue', value: S.fmtMoney(s.revenue), conv: s.retained ? S.fmtMoney(s.revenue / s.retained) + ' per client' : '', money: true },
+    ];
     return {
-      title: firm.name, subtitle: 'Every call to ' + S.fmtPhone(firm.rqNumber) + ' is answered by a live ReplyQuick receptionist, 24/7.',
+      title: firm.name, subtitle: 'Every call to ' + S.fmtPhone(firm.rqNumber) + ' is answered live, 24/7.',
+      actions: `<div class="seg">${[['7', '7 days'], ['30', '30 days'], ['0', 'All time']].map(([v, l]) => `<button data-range="${v}" class="${range === v ? 'active' : ''}">${l}</button>`).join('')}</div>`,
       body: `
-      <div class="grid grid-4">
-        <div class="stat"><div class="stat-label">Calls today</div><div class="stat-value">${today.length}</div><div class="stat-sub">${s.total} in the last 7 days</div></div>
-        <div class="stat"><div class="stat-label">Answered (7 days)</div><div class="stat-value">${s.rate}%</div><div class="stat-sub">${s.answered} answered · ${s.abandoned} hung up before answer</div></div>
-        <div class="stat"><div class="stat-label">New inquiries (7 days)</div><div class="stat-value">${s.newInquiries}</div><div class="stat-sub">${s.intakes} with intake complete</div></div>
-        <div class="stat"><div class="stat-label">Callbacks open</div><div class="stat-value">${tasks.length}</div><div class="stat-sub"><a href="#/firm/callbacks">View callbacks</a></div></div>
+      <div class="pipeline">
+        ${stages.map((st, i) => `
+          <div class="pipe-stage ${st.money ? 'money' : ''}">
+            <div class="stat-label">${st.label}</div>
+            <div class="pipe-value">${st.value}</div>
+            <div class="stat-sub">${st.sub || st.conv || ''}</div>
+          </div>${i < stages.length - 1 ? '<div class="pipe-arrow" aria-hidden="true">&rsaquo;</div>' : ''}`).join('')}
       </div>
-      <div class="card" style="margin-top:16px"><div class="card-head"><h3>Callbacks due</h3><a href="#/firm/callbacks">All callbacks</a></div>
-          ${tasks.length ? tasks.slice(0, 6).map(t => `<div class="list-item"><div><b>${esc(t.title)}</b><div class="small muted">${esc(t.detail || '')}</div><div class="small muted">Due ${esc(S.fmtDay(t.due))}</div></div><button class="btn sm" data-task="${t.id}">Done</button></div>`).join('') : '<div class="empty">You\'re all caught up.</div>'}
+      <div class="grid grid-3" style="margin-top:16px">
+        <div class="stat"><div class="stat-label">Answered after office hours</div><div class="stat-value">${afterHours}</div><div class="stat-sub">Calls that would have gone to voicemail</div></div>
+        <div class="stat"><div class="stat-label">Average time to answer</div><div class="stat-value">${S.fmtDur(s.asa)}</div><div class="stat-sub">From first ring to a live person</div></div>
+        <div class="stat"><div class="stat-label">Consultations booked by us</div><div class="stat-value">${calls.filter(c => c.outcome === 'Consultation booked').length}</div><div class="stat-sub">Booked by your receptionist on the call</div></div>
       </div>
-      <div class="card"><div class="card-head"><h3>Latest calls</h3><a href="#/firm/calls">See all</a></div>${callsTable(calls, { limit: 8 })}</div>
-      <p class="small muted" style="margin-top:16px">"Hung up before answer" means the caller ended the call while it was ringing, before a receptionist could pick up.</p>`,
+      <p class="small muted" style="margin-top:16px">Mark leads as Consultation, Retained or Not a fit from the <a href="#/firm/calls">Calls</a> tab to keep this pipeline current.</p>`,
     };
   }
 
   // ---------- Calls ----------
   function calls() {
     return {
-      title: 'Calls', subtitle: 'Click any call for full details and notes.',
-      body: `<div class="card">${callFilters(null)}<div id="tbl"></div></div>`,
+      title: 'Calls', subtitle: 'Every call we answered for you. Click a call for details, and to update the lead.',
+      body: `<div class="card">${callFilters(null, { stages: true })}<div id="tbl"></div></div>`,
       after: () => {
-        const draw = () => { root.querySelector('#tbl').innerHTML = callsTable(applyFilters(S.getCalls(firmId), root)); };
-        root.querySelectorAll('#fSearch,#fOutcome,#fRange').forEach(el => el.addEventListener('input', draw));
+        const draw = () => { root.querySelector('#tbl').innerHTML = callsTable(applyFilters(S.getCalls(firmId), root), { showStage: true }); };
+        root.querySelectorAll('#fSearch,#fOutcome,#fStage,#fRange').forEach(el => el.addEventListener('input', draw));
         draw();
+        unsubTable = S.subscribe(draw);
       },
-    };
-  }
-
-  // ---------- Callbacks ----------
-  function callbacks() {
-    const all = S.getTasks(firmId).slice().sort((a, b) => a.done - b.done || a.due - b.due);
-    return {
-      title: 'Callbacks', subtitle: 'Callers who asked to hear back from your office.',
-      body: `<div class="card">${all.length ? all.map(t => `
-        <div class="list-item"><div><b style="${t.done ? 'text-decoration:line-through;opacity:.6' : ''}">${esc(t.title)}</b><div class="small muted">${esc(t.detail || '')}</div><div class="small muted">Due ${esc(S.fmtDay(t.due))} ${esc(S.fmtTime(t.due))} · <a href="#" data-open="${esc(t.callId)}">View call</a></div></div>
-        <button class="btn sm ${t.done ? '' : 'primary'}" data-task="${t.id}">${t.done ? 'Reopen' : 'Mark done'}</button></div>`).join('') : '<div class="empty">No callbacks yet.</div>'}</div>`,
     };
   }
 
@@ -127,16 +129,16 @@ export function mount(root, args) {
 
   // ---------- Events ----------
   function onClick(e) {
-    const row = e.target.closest('[data-call]'); if (row) return openCall(row.dataset.call);
-    const op = e.target.closest('[data-open]'); if (op) { e.preventDefault(); return openCall(op.dataset.open); }
-    const t = e.target.closest('[data-task]'); if (t) { S.toggleTask(t.dataset.task); return; }
+    const row = e.target.closest('[data-call]'); if (row) return openCall(row.dataset.call, { editable: true });
+    const rg = e.target.closest('[data-range]'); if (rg) { range = rg.dataset.range; render(); return; }
     const rm = e.target.closest('[data-remove-row]'); if (rm) rm.closest('.repeat-row').remove();
   }
   root.addEventListener('click', onClick);
   // Live refresh when new calls come in, except while editing settings.
-  const unsub = S.subscribe(() => { if (page !== 'settings' && page !== 'calls') render(); });
+  let unsubTable = null;
+  const unsub = S.subscribe(() => { if (page === 'overview') render(); });
   render();
-  return () => { unsub(); root.removeEventListener('click', onClick); };
+  return () => { unsub(); if (unsubTable) unsubTable(); root.removeEventListener('click', onClick); };
 }
 
 export function dirRow(c) {

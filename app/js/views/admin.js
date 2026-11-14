@@ -11,7 +11,6 @@ import { buildScript, PLATFORMS, checklist } from '../swapscript.js';
 const NAV = [
   { label: 'Operations' },
   { href: '#/admin/overview', text: 'Overview' },
-  { href: '#/admin/calls', text: 'All calls' },
   { href: '#/admin/agents', text: 'Receptionists' },
   { href: '#/admin/firms', text: 'Law firms' },
   { label: 'Setup' },
@@ -30,8 +29,9 @@ export function mount(root, args) {
 
   function render() {
     const pages = { overview, calls, agents, firms, onboarding, accounts, activity };
-    const p = (pages[page] || overview)();
-    root.innerHTML = shell({ nav: NAV, active: '#/admin/' + page, title: p.title, subtitle: p.subtitle, body: p.body, actions: p.actions || '' });
+    const view = page === 'agents' && sub === 'calls' ? 'calls' : page;
+    const p = (pages[view] || overview)();
+    root.innerHTML = shell({ nav: NAV, active: '#/admin/' + (page === 'calls' ? 'agents' : page), title: p.title, subtitle: p.subtitle, body: p.body, actions: p.actions || '' });
     if (p.after) p.after();
   }
 
@@ -63,15 +63,15 @@ export function mount(root, args) {
           </tbody></table>
         </div>
       </div>
-      <div class="card" style="margin-top:16px"><div class="card-head"><h3>Latest calls</h3><a href="#/admin/calls">See all</a></div>${callsTable(S.getCalls(), { showFirm: true, limit: 8 })}</div>`,
+      <div class="card" style="margin-top:16px"><div class="card-head"><h3>Latest calls</h3><a href="#/admin/agents/calls">See all</a></div>${callsTable(S.getCalls(), { showFirm: true, limit: 8 })}</div>`,
     };
   }
 
   // ---------- Calls ----------
   function calls() {
     return {
-      title: 'All calls', subtitle: 'Every call across every firm.',
-      body: `<div class="card">${callFilters(S.getFirms())}<div id="tbl"></div></div>`,
+      title: 'Receptionists', subtitle: 'Every call across every firm.',
+      body: `${agentTabs('calls')}<div class="card">${callFilters(S.getFirms())}<div id="tbl"></div></div>`,
       after: () => {
         const draw = () => { root.querySelector('#tbl').innerHTML = callsTable(applyFilters(S.getCalls(), root), { showFirm: true }); };
         root.querySelectorAll('#fSearch,#fFirm,#fOutcome,#fRange').forEach(el => el.addEventListener('input', draw));
@@ -80,12 +80,16 @@ export function mount(root, args) {
     };
   }
 
+  function agentTabs(active) {
+    return `<div class="tabs"><a class="tab-link ${active === 'team' ? 'active' : ''}" href="#/admin/agents">Team</a><a class="tab-link ${active === 'calls' ? 'active' : ''}" href="#/admin/agents/calls">All calls</a></div>`;
+  }
+
   // ---------- Receptionists ----------
   function agents() {
     const today = S.getCalls().filter(c => S.isToday(c.startedAt));
     return {
       title: 'Receptionists', subtitle: 'Status, shift time and today\'s numbers. Add receptionists under Accounts.',
-      body: `<div class="card"><div class="table-wrap"><table>
+      body: `${agentTabs('team')}<div class="card"><div class="table-wrap"><table>
         <thead><tr><th>Receptionist</th><th>Status</th><th>On shift</th><th>Answered today</th><th>Avg speed to answer</th><th>Avg handle</th><th>Firms</th><th></th></tr></thead>
         <tbody>${S.getAgents().map(a => {
           const mine = summarize(today.filter(c => c.agent === a.name));
@@ -304,9 +308,9 @@ export function mount(root, args) {
     const rm = e.target.closest('[data-remove-row]'); if (rm) rm.closest('.repeat-row').remove();
   }
   root.addEventListener('click', onClick);
-  const live = ['overview', 'agents', 'firms', 'accounts', 'activity'].includes(page) || (page === 'onboarding' && !sub);
+  const live = ['overview', (sub === 'calls' ? '' : 'agents'), 'firms', 'accounts', 'activity'].includes(page) || (page === 'onboarding' && !sub);
   const unsub = S.subscribe(() => { if (live) render(); });
-  const clock = setInterval(() => { if (page === 'overview' || page === 'agents') render(); }, 15000);
+  const clock = setInterval(() => { if (page === 'overview' || (page === 'agents' && sub !== 'calls')) render(); }, 15000);
   render();
   return () => { unsub(); clearInterval(clock); root.removeEventListener('click', onClick); };
 }

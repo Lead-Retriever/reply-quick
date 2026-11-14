@@ -6,6 +6,8 @@
 // ============================================================
 import { fmtPhone } from './store.js';
 
+// LT keeps the literal text "<script" out of this file so the app can be inlined into one HTML page.
+const LT = '<';
 const digits10 = (e164) => String(e164).replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
 
 export function buildScript({ firmName, originalNumbers, rqNumber, catchAll }) {
@@ -15,8 +17,8 @@ export function buildScript({ firmName, originalNumbers, rqNumber, catchAll }) {
   const catchJson = catchAll ? JSON.stringify({ display: fmtPhone(rqNumber), dial: rqNumber }) : 'null';
   const safeName = String(firmName).replace(/[^\w &.,'-]/g, '');
 
-  return String.raw`<!-- ReplyQuick number swap for ${safeName} -->
-<script>
+  return String.raw`${LT}!-- ReplyQuick number swap for ${safeName} -->
+${LT}script>
 (function () {
   // Original number (10 digits) mapped to the ReplyQuick number.
   var SWAP = ${swapJson};
@@ -82,7 +84,7 @@ export function buildScript({ firmName, originalNumbers, rqNumber, catchAll }) {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();
 })();
-</script>`;
+${LT}/script>`;
 }
 
 export const PLATFORMS = {
