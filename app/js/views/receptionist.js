@@ -5,7 +5,8 @@
 // and the same screen handles a real call.
 // ============================================================
 import * as S from '../store.js';
-import { esc, toast, STATUS_LABEL, outcomePill } from '../ui.js';
+import { esc, toast, STATUS_LABEL, outcomePill, openPanel } from '../ui.js';
+import { cheatSheetHtml } from './components.js';
 
 const CALLERS = ['James Carter', 'Ana Morales', 'Unknown caller', 'Keisha Brown', 'Unknown caller', 'Luis Ortega', 'Megan Walsh'];
 const DISPOSITIONS = ['Consultation booked', 'Intake complete', 'Transferred', 'Message taken', 'Wrong number / spam'];
@@ -21,7 +22,7 @@ export function mount(root) {
     queue: [],            // callers waiting while this agent is busy
     incoming: null,       // { firmId, phone, ringStart }
     call: null,           // active call details
-    contextTab: 'script',
+    contextTab: 'cheat',
     auto: false,
   };
   let autoTimer = null;
@@ -58,7 +59,7 @@ export function mount(root) {
 
   function ring(c) {
     c.ringStart = Date.now();
-    desk.incoming = c; desk.phase = 'ringing'; desk.contextTab = 'script';
+    desk.incoming = c; desk.phase = 'ringing'; desk.contextTab = 'cheat';
     S.setAgentStatus(agent.id, 'ringing');
     render();
   }
@@ -102,6 +103,7 @@ export function mount(root) {
       consultAt: c.wrap.outcome === 'Consultation booked' && c.wrap.consultAt ? new Date(c.wrap.consultAt).getTime() : null,
       stage: c.form.callerType === 'New inquiry' ? (c.wrap.outcome === 'Consultation booked' ? 'consult' : 'inquiry') : null,
       revenue: 0,
+      recording: !!S.getFirm(c.firmId).recordingEnabled,
     };
     S.logCall(record);
     toast('Call saved to ' + S.getFirm(c.firmId).name + "'s dashboard");
@@ -132,6 +134,20 @@ export function mount(root) {
   }
   function completeWarm() { endCall(); }
 
+  // ---------- Cheat sheet (opened from the assigned firms list) ----------
+  function openCheat(firmId) {
+    const f = S.getFirm(firmId); if (!f) return;
+    openPanel(`
+      <div class="card-head"><div><div class="small muted">CHEAT SHEET</div><h2>${esc(f.name)}</h2><div class="small muted">${esc(f.practice)} · ${esc(S.firmLocalTime(f))} local · ${S.officeOpenNow(f) ? 'office open' : 'office closed'}</div></div><button class="btn sm" data-close>Close</button></div>
+      <div class="greeting-box">"${esc(greet(f))}"</div>
+      ${cheatSheetHtml(f)}
+      <h4 class="cs-h">Transfer directory</h4>
+      ${f.directory.map(c => `<div class="list-item"><div><b>${esc(c.name)}</b><div class="small muted">${esc(c.role)}</div></div><span class="small">${esc(S.fmtPhone(c.phone))}${c.afterHours ? '<br><span class="muted">after hours OK</span>' : ''}</span></div>`).join('')}
+      <h4 class="cs-h" style="margin-top:14px">FAQs</h4>
+      ${f.faqs.map(x => `<div class="list-item" style="display:block"><b>${esc(x.q)}</b><div>${esc(x.a)}</div></div>`).join('') || '<p class="muted small">None</p>'}
+      <h4 class="cs-h" style="margin-top:14px">Office hours</h4>${hoursTable(f)}`);
+  }
+
   // ---------- Rendering ----------
   function topBar() {
     const mine = S.getCalls().filter(c => c.agent === agent.name && S.isToday(c.startedAt));
@@ -153,8 +169,8 @@ export function mount(root) {
         <div>On shift<b>${agent.shiftStart ? S.fmtShift((Date.now() - agent.shiftStart) / 1000) : 'Off'}</b></div>
       </div>
       <div class="spacer"></div>
-      <button class="btn ghost sm" data-do="simulate">Simulate incoming call</button>
-      <label class="check small" style="color:#fff"><input type="checkbox" id="autoSim" ${desk.auto ? 'checked' : ''}/> Auto</label>
+      <button class="btn ghost sm" data-do="simulate" title="Prototype only: rings a fake call. In the live version real calls ring here on their own.">Demo: simulate a call</button>
+      <label class="check small" style="color:#fff" title="Prototype only: rings a fake call every 15 to 30 seconds so you can watch the flow without clicking."><input type="checkbox" id="autoSim" ${desk.auto ? 'checked' : ''}/> Demo: auto calls</label>
       <span class="small" style="opacity:.8">${esc(agent.name)}</span>
       <button class="btn ghost sm" data-action="logout">Log out</button>
     </div>`;
@@ -169,6 +185,7 @@ export function mount(root) {
         <div class="ring-firm">${esc(firm.name)}</div>
         <div class="muted">${esc(firm.practice)} · Caller ${esc(S.fmtPhone(desk.incoming.phone))}${known ? ' · <b>Returning caller: ' + esc(known.callerName) + '</b>' : ''} · Waiting <span class="num" data-since="${desk.incoming.queuedAt}">0:00</span></div>
         <div class="greeting-box">"${esc(greet(firm))}"</div>
+        ${firm.recordingEnabled ? '<div class="small muted" style="margin-bottom:12px">Recorded call: the caller already heard the recording notice.</div>' : ''}
         <div class="btn-row"><button class="btn success lg" data-do="answer">Answer</button></div>
       </div>`;
     }
@@ -254,13 +271,15 @@ export function mount(root) {
     const firm = activeFirm();
     if (!firm) {
       return `<div class="card"><div class="card-head"><h3>Your assigned firms</h3></div>
-        ${firmsFor().map(f => `<div class="list-item"><div><b>${esc(f.name)}</b><div class="small muted">${esc(f.practice)} · ${esc(S.firmLocalTime(f))} local</div></div>${S.officeOpenNow(f) ? '<span class="pill success">Office open</span>' : '<span class="pill">Office closed</span>'}</div>`).join('')}
+        <p class="small muted" style="margin-top:0">Click a firm to study its cheat sheet before calls come in.</p>
+        ${firmsFor().map(f => `<div class="list-item"><button class="firm-link" data-do="cheat" data-firm="${f.id}"><b>${esc(f.name)}</b><div class="small muted">${esc(f.practice)} · ${esc(S.firmLocalTime(f))} local</div></button>${S.officeOpenNow(f) ? '<span class="pill success">Office open</span>' : '<span class="pill">Office closed</span>'}</div>`).join('')}
       </div>`;
     }
     const open = S.officeOpenNow(firm);
-    const tabs = [['script', 'Greeting'], ['faqs', 'FAQs'], ['hours', 'Hours'], ['directory', 'Transfer directory']];
+    const tabs = [['cheat', 'Cheat sheet'], ['script', 'Greeting'], ['faqs', 'FAQs'], ['hours', 'Hours'], ['directory', 'Transfer']];
     let body = '';
     if (desk.contextTab === 'script') body = `<div class="greeting-box">"${esc(greet(firm))}"</div><div class="small muted">Instructions</div><p>${esc(firm.instructions || 'None')}</p><div class="small muted">Never give legal advice. If asked, say an attorney will need to answer that.</div>`;
+    if (desk.contextTab === 'cheat') body = cheatSheetHtml(firm);
     if (desk.contextTab === 'faqs') body = firm.faqs.length ? firm.faqs.map(f => `<div class="list-item" style="display:block"><b>${esc(f.q)}</b><div>${esc(f.a)}</div></div>`).join('') : '<div class="empty">No FAQs yet.</div>';
     if (desk.contextTab === 'hours') body = hoursTable(firm);
     if (desk.contextTab === 'directory') {
@@ -295,6 +314,7 @@ export function mount(root) {
     const b = e.target.closest('[data-do]'); if (!b) return;
     const d = b.dataset.do;
     if (d === 'simulate') simulateIncoming();
+    if (d === 'cheat') openCheat(b.dataset.firm);
     if (d === 'answer') answer();
     if (d === 'mute') { desk.call.muted = !desk.call.muted; render(); }
     if (d === 'hold') { desk.call.held = !desk.call.held; render(); }

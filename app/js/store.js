@@ -6,7 +6,7 @@
 // only call these functions, so they will not need to change.
 // ============================================================
 
-const KEY = 'rq_demo_v2';
+const KEY = 'rq_demo_v3';
 const listeners = new Set();
 
 // ---------- Seeded random so demo data looks the same each reset ----------
@@ -80,6 +80,48 @@ function seed() {
     },
   ];
 
+  // ---------- Receptionist cheat sheets (per firm) ----------
+  const CHEAT = {
+    firm_morgan: {
+      handles: ['Car, truck and motorcycle accidents', 'Slip and fall', 'Work injuries / workers comp', 'Wrongful death', 'Dog bites'],
+      notHandled: ['Divorce or family law', 'Criminal charges', 'Medical malpractice (refer: say the firm will call back with a referral)'],
+      ask: ['Full name and best phone number', 'Date of the accident', 'What happened, in their words', 'Were they hurt? Did they see a doctor or go to the ER?', 'Was a police report made?', 'Has an insurance company contacted them?'],
+      urgent: [
+        { when: 'Accident happened in the last 48 hours', action: 'Warm transfer to Lisa Park (intake). After hours: Daniel Morgan.' },
+        { when: 'Insurance adjuster is pressuring them to sign something', action: 'Tell them not to sign anything yet, then warm transfer to Lisa Park.' },
+        { when: 'Wrongful death', action: 'Warm transfer to Daniel Morgan, any time of day.' },
+      ],
+      say: ['"There is no cost to talk with an attorney. The firm only gets paid if you win."', '"Let me get a few details so the attorney is ready when they speak with you."'],
+      never: ['Give legal advice or guess what a case is worth', 'Promise the firm will take the case', 'Say "you have a great case"'],
+      facts: [{ label: 'Consultation', value: 'Free' }, { label: 'Fee', value: 'Contingency, no win no fee' }, { label: 'Languages', value: 'English, Spanish' }, { label: 'Parking', value: 'Garage on SE 2nd St' }],
+    },
+    firm_rivera: {
+      handles: ['Divorce (contested and uncontested)', 'Child custody and visitation', 'Child support and alimony', 'Prenups and postnups', 'Protective orders'],
+      notHandled: ['Criminal cases', 'Personal injury', 'Cases outside Travis, Williamson and Hays counties'],
+      ask: ['Full name and best phone number', 'County they live in', 'Are there children? Ages?', 'Has anything been filed yet? Were they served papers?', 'Any court date coming up?'],
+      urgent: [
+        { when: 'Caller mentions abuse, threats or feeling unsafe', action: 'If in danger now, tell them to call 911. Then warm transfer to Elena Rivera, any time.' },
+        { when: 'Court date within 7 days', action: 'Warm transfer to Marcus Hill. After hours: Elena Rivera.' },
+      ],
+      say: ['"Initial consultations are $150 for one hour."', '"Everything you share stays confidential with the firm."'],
+      never: ['Give legal advice', 'Comment on the other spouse or take sides', 'Discuss another client\'s case'],
+      facts: [{ label: 'Consultation', value: '$150, one hour' }, { label: 'Counties', value: 'Travis, Williamson, Hays' }, { label: 'Friday hours', value: 'Closes at 3:00 PM' }],
+    },
+    firm_chen: {
+      handles: ['DUI / DWI', 'Drug charges', 'Assault and domestic violence charges', 'Theft and fraud', 'Expungements', 'Bail hearings'],
+      notHandled: ['Civil lawsuits', 'Family law', 'Immigration (say the firm will call back with a referral)'],
+      ask: ['Caller\'s name and best phone number', 'Who was arrested (full name and date of birth)', 'Where they are being held', 'The charge, if known', 'Any court date?'],
+      urgent: [
+        { when: 'Someone is in custody right now', action: 'Get name, DOB, location, charge. Warm transfer to Victor Chen, 24/7.' },
+        { when: 'Police want to question the caller', action: 'Tell them Victor advises not to answer questions without an attorney, then warm transfer to Victor.' },
+      ],
+      say: ['"Victor handles bail hearings and is reachable around the clock for anyone in custody."'],
+      never: ['Ask whether the person is guilty', 'Give legal advice', 'Discuss details of the case beyond what is needed for intake'],
+      facts: [{ label: 'Consultation', value: 'Free for arrests in progress' }, { label: 'Availability', value: 'Victor answers transfers 24/7' }],
+    },
+  };
+  firms.forEach(f => { f.cheatSheet = CHEAT[f.id]; f.recordingEnabled = true; f.calendars = { google: null, outlook: null }; });
+
   const agents = [
     { id: 'agent_sarah', name: 'Sarah Lopez', email: 'sarah@replyquick.demo', status: 'available', firmIds: firms.map(f => f.id), shiftStart: Date.now() - 4 * 3600000 },
     { id: 'agent_john', name: 'John Bautista', email: 'john@replyquick.demo', status: 'on_call', firmIds: firms.map(f => f.id), shiftStart: Date.now() - 6 * 3600000 },
@@ -114,7 +156,17 @@ function seed() {
   const now = Date.now();
   for (let i = 0; i < 190; i++) {
     const firm = pick(firms);
-    const started = now - Math.floor(r() * 30 * DAY);
+    // Weighted toward business hours and weekdays so the Insights charts look realistic.
+    const HOUR_W = [1, 1, 0.5, 0.5, 0.5, 1, 2, 4, 7, 9, 10, 9, 8, 9, 9, 8, 7, 6, 5, 4, 3, 3, 2, 1.5];
+    let started;
+    do {
+      const day = new Date(now - Math.floor(r() * 30) * DAY); day.setHours(0, 0, 0, 0);
+      let x = r() * HOUR_W.reduce((a, b) => a + b, 0), hour = 0;
+      while (x > HOUR_W[hour]) { x -= HOUR_W[hour]; hour++; }
+      started = day.getTime() + hour * 3600000 + Math.floor(r() * 3600000);
+      const dow = new Date(started).getDay();
+      if ((dow === 0 || dow === 6) && r() < 0.55) started = null;
+    } while (!started || started > now);
     const reason = pick(reasons[firm.id]);
     const callerType = /existing/i.test(reason) ? 'Existing client' : /counsel|adjuster/i.test(reason) ? 'Other' : 'New inquiry';
     const o = r();
@@ -141,7 +193,20 @@ function seed() {
     });
   }
   calls.sort((a, b) => b.startedAt - a.startedAt);
-  return { version: 2, firms, agents, users, calls, tasks, audit: [], onboardingDrafts: [] };
+  // ---------- Sample activity log ----------
+  const H = 3600000;
+  const audit = [
+    { id: 'aud1', at: now - 2 * H, by: 'ReplyQuick Admin', action: 'Firm settings updated', detail: 'Chen Criminal Defense: transfer directory' },
+    { id: 'aud2', at: now - 5 * H, by: 'ReplyQuick Admin', action: 'Agent assignments changed', detail: 'Priya Nair: Morgan & Associates Law, Rivera Family Law' },
+    { id: 'aud3', at: now - 26 * H, by: 'ReplyQuick Admin', action: 'Recording turned on', detail: 'Rivera Family Law' },
+    { id: 'aud4', at: now - 2 * DAY, by: 'Daniel Morgan', action: 'Lead marked retained', detail: 'Morgan & Associates Law: $18,500' },
+    { id: 'aud5', at: now - 3 * DAY, by: 'ReplyQuick Admin', action: 'Account created', detail: 'ken@replyquick.demo (receptionist)' },
+    { id: 'aud6', at: now - 9 * DAY, by: 'ReplyQuick Admin', action: 'Firm activated', detail: 'Chen Criminal Defense' },
+  ];
+  // Every demo call has a recording (recording is on for all demo firms).
+  calls.forEach(c => { c.recording = true; });
+
+  return { version: 3, firms, agents, users, calls, tasks, audit, onboardingDrafts: [] };
 }
 
 // ---------- Persistence ----------
@@ -191,6 +256,10 @@ export const getUsers = () => state.users;
 export const getCalls = (firmId) => firmId ? state.calls.filter(c => c.firmId === firmId) : state.calls;
 export const getTasks = (firmId) => firmId ? state.tasks.filter(t => t.firmId === firmId) : state.tasks;
 export const getAudit = () => state.audit;
+
+// Estimated share of calls a firm answers on its own without ReplyQuick.
+// Used for the "without ReplyQuick" comparison on the firm overview. Change it here.
+export const BASELINE_ANSWER_RATE = 0.7;
 export const getDrafts = () => state.onboardingDrafts;
 
 // ---------- Writes ----------
@@ -201,7 +270,7 @@ export function audit(action, detail) {
 }
 export function updateFirm(id, patch) {
   const f = getFirm(id); if (!f) return;
-  Object.assign(f, patch); audit('Firm settings updated', f.name); save();
+  Object.assign(f, patch); audit('Firm settings updated', f.name + (patch._what ? ': ' + patch._what : '')); delete f._what; save();
 }
 export function setAgentStatus(agentId, status) {
   const a = getAgent(agentId); if (!a) return;
@@ -210,9 +279,14 @@ export function setAgentStatus(agentId, status) {
   else if (!a.shiftStart) a.shiftStart = Date.now();
   save();
 }
-export function updateCall(id, patch) {
+export function updateCall(id, patch, logText) {
   const c = state.calls.find(x => x.id === id); if (!c) return;
-  Object.assign(c, patch); save();
+  Object.assign(c, patch); if (logText) audit(logText[0], logText[1]); save();
+}
+export function setCalendar(firmId, provider, account) {
+  const f = getFirm(firmId); if (!f) return;
+  f.calendars = f.calendars || {}; f.calendars[provider] = account;
+  audit(account ? 'Calendar connected' : 'Calendar disconnected', f.name + ': ' + (provider === 'google' ? 'Google' : 'Outlook') + (account ? ' (' + account + ')' : '')); save();
 }
 export function logCall(call) { state.calls.unshift(call); save(); }
 export function addTask(task) { state.tasks.unshift(task); save(); }

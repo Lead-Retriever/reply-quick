@@ -1,6 +1,7 @@
 // ============================================================
-// Firm dashboard: what the law firm sees. Intentionally simple.
-// A firm account only ever sees its own firm's data.
+// Firm (law firm owner) dashboard. Kept deliberately simple:
+// Overview (pipeline + value), Calls, Calendar. No settings:
+// ReplyQuick handles all setup ("done for you").
 // ============================================================
 import * as S from '../store.js';
 import { esc, shell, toast } from '../ui.js';
@@ -9,39 +10,46 @@ import { callsTable, callFilters, applyFilters, openCall, summarize } from './co
 const NAV = [
   { href: '#/firm/overview', text: 'Overview' },
   { href: '#/firm/calls', text: 'Calls' },
-  { href: '#/firm/settings', text: 'Settings' },
+  { href: '#/firm/calendar', text: 'Calendar' },
 ];
 
 export function mount(root, args) {
   const user = S.currentUser();
   const page = args[0] || 'overview';
   const firmId = user.firmId;
+  let range = '30';
+  let calMonth = new Date(); calMonth.setDate(1); calMonth.setHours(0, 0, 0, 0);
+  let unsubTable = null;
 
   function render() {
     const firm = S.getFirm(firmId);
     if (!firm) { root.innerHTML = '<div class="main"><div class="card">This login is not linked to a firm. Contact ReplyQuick support.</div></div>'; return; }
-    const pages = { overview, calls, settings };
+    const pages = { overview, calls, calendar };
     const p = (pages[page] || overview)(firm);
-    root.innerHTML = shell({ nav: NAV, active: '#/firm/' + page, title: p.title, subtitle: p.subtitle, body: p.body, actions: p.actions || '' });
+    root.innerHTML = shell({ nav: NAV, active: '#/firm/' + (pages[page] ? page : 'overview'), title: p.title, subtitle: p.subtitle, body: p.body, actions: p.actions || '' });
     if (p.after) p.after();
   }
 
-  // ---------- Overview: the pipeline ----------
-  let range = '30';
+  // ---------- Overview: pipeline + what they'd have without us ----------
   function overview(firm) {
     const all = S.getCalls(firmId);
     const days = Number(range);
     const calls = days ? all.filter(c => c.startedAt > Date.now() - days * 86400000) : all;
     const s = summarize(calls);
+    const k = S.BASELINE_ANSWER_RATE;
+    const w = { answered: Math.round(s.answered * k), leads: Math.round(s.newInquiries * k), consults: Math.round(s.consults * k), retained: Math.round(s.retained * k), revenue: s.revenue * k };
+    const missed = { calls: s.answered - w.answered, retained: s.retained - w.retained, revenue: s.revenue - w.revenue };
     const afterHours = calls.filter(c => !S.officeOpenAt(firm, c.startedAt)).length;
+    const booked = calls.filter(c => c.outcome === 'Consultation booked').length;
     const pct = (a, b) => b ? Math.round((a / b) * 100) + '%' : '0%';
     const stages = [
-      { label: 'Calls answered', value: s.answered, sub: '100% picked up by a live receptionist' },
-      { label: 'New leads', value: s.newInquiries, conv: pct(s.newInquiries, s.answered) + ' of calls' },
-      { label: 'Consultations', value: s.consults, conv: pct(s.consults, s.newInquiries) + ' of leads' },
-      { label: 'Retained clients', value: s.retained, conv: pct(s.retained, s.consults) + ' of consultations' },
-      { label: 'Revenue', value: S.fmtMoney(s.revenue), conv: s.retained ? S.fmtMoney(s.revenue / s.retained) + ' per client' : '', money: true },
+      { label: 'Calls answered', value: s.answered, sub: 'Every call picked up live', without: w.answered },
+      { label: 'New leads', value: s.newInquiries, sub: pct(s.newInquiries, s.answered) + ' of calls', without: w.leads },
+      { label: 'Consultations', value: s.consults, sub: pct(s.consults, s.newInquiries) + ' of leads', without: w.consults },
+      { label: 'Retained clients', value: s.retained, sub: pct(s.retained, s.consults) + ' of consultations', without: w.retained },
+      { label: 'Revenue', value: S.fmtMoney(s.revenue), sub: s.retained ? S.fmtMoney(s.revenue / s.retained) + ' per client' : '', without: S.fmtMoney(w.revenue), money: true },
     ];
+    const rangeLabel = { '7': 'the last 7 days', '30': 'the last 30 days', '0': 'all time' }[range];
     return {
       title: firm.name, subtitle: 'Every call to ' + S.fmtPhone(firm.rqNumber) + ' is answered live, 24/7.',
       actions: `<div class="seg">${[['7', '7 days'], ['30', '30 days'], ['0', 'All time']].map(([v, l]) => `<button data-range="${v}" class="${range === v ? 'active' : ''}">${l}</button>`).join('')}</div>`,
@@ -51,79 +59,83 @@ export function mount(root, args) {
           <div class="pipe-stage ${st.money ? 'money' : ''}">
             <div class="stat-label">${st.label}</div>
             <div class="pipe-value">${st.value}</div>
-            <div class="stat-sub">${st.sub || st.conv || ''}</div>
+            <div class="stat-sub">${st.sub}</div>
+            <div class="pipe-without">Without ReplyQuick: ${st.without}</div>
           </div>${i < stages.length - 1 ? '<div class="pipe-arrow" aria-hidden="true">&rsaquo;</div>' : ''}`).join('')}
       </div>
-      <div class="grid grid-3" style="margin-top:16px">
-        <div class="stat"><div class="stat-label">Answered after office hours</div><div class="stat-value">${afterHours}</div><div class="stat-sub">Calls that would have gone to voicemail</div></div>
-        <div class="stat"><div class="stat-label">Average time to answer</div><div class="stat-value">${S.fmtDur(s.asa)}</div><div class="stat-sub">From first ring to a live person</div></div>
-        <div class="stat"><div class="stat-label">Consultations booked by us</div><div class="stat-value">${calls.filter(c => c.outcome === 'Consultation booked').length}</div><div class="stat-sub">Booked by your receptionist on the call</div></div>
+      <div class="loss-banner">
+        <div><div class="small" style="font-weight:600">What you would have missed in ${rangeLabel} without ReplyQuick</div>
+          <p>About <b>${missed.calls} calls</b>, <b>${missed.retained} retained clients</b> and <b>${S.fmtMoney(missed.revenue)}</b> in fees.</p></div>
+        <div class="big">${S.fmtMoney(missed.revenue)}</div>
       </div>
-      <p class="small muted" style="margin-top:16px">Mark leads as Consultation, Retained or Not a fit from the <a href="#/firm/calls">Calls</a> tab to keep this pipeline current.</p>`,
+      <div class="grid grid-2" style="margin-top:16px">
+        <div class="stat"><div class="stat-label">Answered after office hours</div><div class="stat-value">${afterHours}</div><div class="stat-sub">Calls that would have gone to voicemail</div></div>
+        <div class="stat"><div class="stat-label">Consultations booked by us</div><div class="stat-value">${booked}</div><div class="stat-sub">Booked on the call and added to your <a href="#/firm/calendar">calendar</a></div></div>
+      </div>
+      <p class="small muted" style="margin-top:16px">"Without ReplyQuick" is an estimate that assumes your office would answer about ${Math.round(k * 100)}% of these calls on its own. Mark leads as Consultation, Retained or Not a fit in <a href="#/firm/calls">Calls</a> to keep your pipeline current.</p>`,
     };
   }
 
   // ---------- Calls ----------
   function calls() {
     return {
-      title: 'Calls', subtitle: 'Every call we answered for you. Click a call for details, and to update the lead.',
+      title: 'Calls', subtitle: 'Every call we answered for you. Press play to hear it, or click a call for details and to update the lead.',
       body: `<div class="card">${callFilters(null, { stages: true })}<div id="tbl"></div></div>`,
       after: () => {
-        const draw = () => { root.querySelector('#tbl').innerHTML = callsTable(applyFilters(S.getCalls(firmId), root), { showStage: true }); };
+        const draw = () => { const t = root.querySelector('#tbl'); if (t) t.innerHTML = callsTable(applyFilters(S.getCalls(firmId), root), { showStage: true }); };
         root.querySelectorAll('#fSearch,#fOutcome,#fStage,#fRange').forEach(el => el.addEventListener('input', draw));
         draw();
+        if (unsubTable) unsubTable();
         unsubTable = S.subscribe(draw);
       },
     };
   }
 
-  // ---------- Settings ----------
-  function settings(firm) {
-    const days = [['mon', 'Monday'], ['tue', 'Tuesday'], ['wed', 'Wednesday'], ['thu', 'Thursday'], ['fri', 'Friday'], ['sat', 'Saturday'], ['sun', 'Sunday']];
+  // ---------- Calendar ----------
+  function calendar(firm) {
+    const cal = firm.calendars || {};
+    const consults = S.getCalls(firmId).filter(c => c.consultAt).sort((a, b) => a.consultAt - b.consultAt);
+    const upcoming = consults.filter(c => c.consultAt >= Date.now()).slice(0, 8);
+    const y = calMonth.getFullYear(), m = calMonth.getMonth();
+    const first = new Date(y, m, 1); const start = new Date(first); start.setDate(1 - first.getDay());
+    const cells = [];
+    for (let i = 0; i < 42; i++) { const d = new Date(start); d.setDate(start.getDate() + i); cells.push(d); }
+    const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const today = new Date();
+    const connectRow = (key, name, color, letter) => `
+      <div class="cal-connect">
+        <div style="display:flex;gap:12px;align-items:center"><div class="cal-logo" style="background:${color}">${letter}</div>
+          <div><b>${name}</b><div class="small muted">${cal[key] ? 'Connected as ' + esc(cal[key]) : 'Not connected'}</div></div></div>
+        ${cal[key] ? `<button class="btn sm" data-cal-off="${key}">Disconnect</button>` : `<button class="btn primary sm" data-cal-on="${key}">Connect</button>`}
+      </div>`;
     return {
-      title: 'Settings', subtitle: 'Changes go live for the receptionists immediately.',
-      actions: '<button class="btn primary" id="saveSettings">Save changes</button>',
+      title: 'Calendar', subtitle: 'Consultations your receptionist books land here and on your connected calendar.',
       body: `
-      <div class="card"><div class="card-head"><h3>Greeting</h3></div>
-        <label class="field"><span>What the receptionist says when answering. {agent} becomes their first name.</span><input type="text" id="sGreeting" value="${esc(firm.greeting)}" /></label>
-      </div>
-      <div class="card"><div class="card-head"><h3>Instructions for receptionists</h3></div>
-        <label class="field"><span>What to ask new callers, how to handle existing clients, anything urgent.</span><textarea id="sInstr" style="min-height:120px">${esc(firm.instructions)}</textarea></label>
-      </div>
-      <div class="card"><div class="card-head"><h3>Office hours</h3><span class="small muted">Time zone: ${esc(firm.timezone)}</span></div>
-        <p class="small muted" style="margin-top:0">We answer 24/7 no matter what. Office hours decide who can receive transferred calls.</p>
-        <table>${days.map(([k, n]) => `<tr><td style="width:130px">${n}</td>
-          <td style="width:110px"><label class="check"><input type="checkbox" data-open-day="${k}" ${firm.hours[k] ? 'checked' : ''}/> Open</label></td>
-          <td><input type="time" data-h-open="${k}" value="${firm.hours[k] ? firm.hours[k].open : '09:00'}" style="max-width:140px" /> to <input type="time" data-h-close="${k}" value="${firm.hours[k] ? firm.hours[k].close : '17:00'}" style="max-width:140px" /></td></tr>`).join('')}</table>
-      </div>
-      <div class="card"><div class="card-head"><h3>Transfer directory</h3><button class="btn sm" id="addContact">Add person</button></div>
-        <div id="dirRows">${firm.directory.map(dirRow).join('')}</div>
-      </div>
-      <div class="card"><div class="card-head"><h3>FAQs</h3><button class="btn sm" id="addFaq">Add FAQ</button></div>
-        <div id="faqRows">${firm.faqs.map(faqRow).join('')}</div>
-      </div>
-      <div class="card"><div class="card-head"><h3>Your ReplyQuick number</h3></div>
-        <p style="margin:0"><b class="num">${esc(S.fmtPhone(firm.rqNumber))}</b></p>
-        <p class="small muted">Call recording: ${firm.recordingEnabled ? 'on' : 'off'}. Contact ReplyQuick to change this.</p>
+      <div class="grid grid-21">
+        <div class="card">
+          <div class="card-head"><h3>${calMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h3>
+            <div class="btn-row"><button class="btn sm" data-month="-1">Previous</button><button class="btn sm" data-month="0">Today</button><button class="btn sm" data-month="1">Next</button></div></div>
+          <div class="cal-grid">
+            ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<div class="cal-dow">${d}</div>`).join('')}
+            ${cells.map(d => {
+              const evs = consults.filter(c => sameDay(new Date(c.consultAt), d));
+              return `<div class="cal-day ${d.getMonth() !== m ? 'other' : ''} ${sameDay(d, today) ? 'today' : ''}"><div class="cal-num">${d.getDate()}</div>
+                ${evs.slice(0, 3).map(c => `<button class="cal-ev" data-call="${esc(c.id)}">${esc(S.fmtTime(c.consultAt))} ${esc(c.callerName)}</button>`).join('')}
+                ${evs.length > 3 ? `<div class="small muted">+${evs.length - 3} more</div>` : ''}</div>`;
+            }).join('')}
+          </div>
+        </div>
+        <div class="stack">
+          <div class="card"><div class="card-head"><h3>Connected calendars</h3></div>
+            ${connectRow('google', 'Google Calendar', '#1a73e8', 'G')}
+            ${connectRow('outlook', 'Outlook Calendar', '#0a64ad', 'O')}
+            <p class="small muted" style="margin-bottom:0">Once connected, every consultation we book is added to your calendar automatically, with the caller's name, number and notes.</p>
+          </div>
+          <div class="card"><div class="card-head"><h3>Upcoming consultations</h3></div>
+            ${upcoming.length ? upcoming.map(c => `<div class="list-item clickable" data-call="${esc(c.id)}" style="cursor:pointer"><div><b>${esc(c.callerName)}</b><div class="small muted">${esc(c.reason)}</div></div><div class="small num" style="text-align:right;white-space:nowrap">${esc(S.fmtDay(c.consultAt))}<br>${esc(S.fmtTime(c.consultAt))}</div></div>`).join('') : '<div class="empty">No upcoming consultations.</div>'}
+          </div>
+        </div>
       </div>`,
-      after: () => {
-        root.querySelector('#addContact').addEventListener('click', () => root.querySelector('#dirRows').insertAdjacentHTML('beforeend', dirRow({ id: S.uid('c'), name: '', role: '', phone: '', transfer: true, afterHours: false })));
-        root.querySelector('#addFaq').addEventListener('click', () => root.querySelector('#faqRows').insertAdjacentHTML('beforeend', faqRow({ q: '', a: '' })));
-        root.querySelector('#saveSettings').addEventListener('click', () => {
-          const hours = {};
-          days.forEach(([k]) => {
-            hours[k] = root.querySelector(`[data-open-day="${k}"]`).checked ? { open: root.querySelector(`[data-h-open="${k}"]`).value, close: root.querySelector(`[data-h-close="${k}"]`).value } : null;
-          });
-          const directory = [...root.querySelectorAll('#dirRows .repeat-row')].map(r => ({
-            id: r.dataset.id, name: r.querySelector('[data-k=name]').value.trim(), role: r.querySelector('[data-k=role]').value.trim(),
-            phone: S.toE164(r.querySelector('[data-k=phone]').value) || r.querySelector('[data-k=phone]').value.trim(),
-            transfer: true, afterHours: r.querySelector('[data-k=after]').checked,
-          })).filter(c => c.name);
-          const faqs = [...root.querySelectorAll('#faqRows .repeat-row')].map(r => ({ q: r.querySelector('[data-k=q]').value.trim(), a: r.querySelector('[data-k=a]').value.trim() })).filter(f => f.q);
-          S.updateFirm(firmId, { greeting: root.querySelector('#sGreeting').value, instructions: root.querySelector('#sInstr').value, hours, directory, faqs });
-          toast('Settings saved');
-        });
-      },
     };
   }
 
@@ -131,29 +143,20 @@ export function mount(root, args) {
   function onClick(e) {
     const row = e.target.closest('[data-call]'); if (row) return openCall(row.dataset.call, { editable: true });
     const rg = e.target.closest('[data-range]'); if (rg) { range = rg.dataset.range; render(); return; }
-    const rm = e.target.closest('[data-remove-row]'); if (rm) rm.closest('.repeat-row').remove();
+    const mo = e.target.closest('[data-month]');
+    if (mo) { const n = Number(mo.dataset.month); if (n === 0) { calMonth = new Date(); calMonth.setDate(1); } else calMonth.setMonth(calMonth.getMonth() + n); calMonth.setHours(0, 0, 0, 0); render(); return; }
+    const on = e.target.closest('[data-cal-on]');
+    if (on) {
+      // Prototype: pretend the sign-in succeeded. Live version opens Google / Microsoft sign-in.
+      const firm = S.getFirm(firmId);
+      S.setCalendar(firmId, on.dataset.calOn, firm.contactEmail);
+      toast((on.dataset.calOn === 'google' ? 'Google' : 'Outlook') + ' Calendar connected');
+      return;
+    }
+    const off = e.target.closest('[data-cal-off]'); if (off) { S.setCalendar(firmId, off.dataset.calOff, null); return; }
   }
   root.addEventListener('click', onClick);
-  // Live refresh when new calls come in, except while editing settings.
-  let unsubTable = null;
-  const unsub = S.subscribe(() => { if (page === 'overview') render(); });
+  const unsub = S.subscribe(() => { if (page === 'overview' || page === 'calendar') render(); });
   render();
   return () => { unsub(); if (unsubTable) unsubTable(); root.removeEventListener('click', onClick); };
-}
-
-export function dirRow(c) {
-  return `<div class="repeat-row" data-id="${esc(c.id)}">
-    <input type="text" data-k="name" placeholder="Name" value="${esc(c.name)}" />
-    <input type="text" data-k="role" placeholder="Role" value="${esc(c.role)}" />
-    <input type="tel" data-k="phone" placeholder="Phone" value="${esc(S.fmtPhone(c.phone))}" />
-    <label class="check small"><input type="checkbox" data-k="after" ${c.afterHours ? 'checked' : ''}/> After hours</label>
-    <button class="btn sm" data-remove-row type="button">Remove</button>
-  </div>`;
-}
-export function faqRow(f) {
-  return `<div class="repeat-row two">
-    <input type="text" data-k="q" placeholder="Question" value="${esc(f.q)}" />
-    <input type="text" data-k="a" placeholder="Answer" value="${esc(f.a)}" />
-    <button class="btn sm" data-remove-row type="button">Remove</button>
-  </div>`;
 }

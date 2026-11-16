@@ -198,3 +198,63 @@ pre.code { background: #0f1726; color: #d8e1ee; padding: 16px; border-radius: 10
 .seg button.active { background: var(--rq-accent); color: #fff; }
 .tabs a.tab-link { padding: 10px 12px; font: 600 13px var(--rq-font-body); color: var(--rq-text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .tabs a.tab-link.active { color: var(--rq-accent); border-bottom-color: var(--rq-accent); }
+
+/* ---------- Recording player ---------- */
+.play-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--rq-accent); background: var(--rq-accent-soft); color: var(--rq-accent); cursor: pointer; font-size: 11px; display: inline-grid; place-items: center; padding: 0; }
+.play-btn:hover, .play-btn.playing { background: var(--rq-accent); color: #fff; }
+.player-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 60; width: min(640px, calc(100% - 32px)); background: var(--rq-surface); border: 1px solid var(--rq-border); border-radius: var(--rq-radius-lg); box-shadow: var(--rq-shadow-lg); padding: 12px 16px; display: flex; align-items: center; gap: 14px; }
+.player-info { flex: 1; min-width: 0; }
+.player-track { height: 6px; border-radius: 3px; background: var(--rq-surface-2); margin: 8px 0 4px; cursor: pointer; overflow: hidden; }
+.player-fill { height: 100%; background: var(--rq-accent); }
+
+/* ---------- Without-us comparison ---------- */
+.pipe-without { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--rq-border); color: var(--rq-danger); font-size: 12.5px; font-weight: 600; }
+.pipe-stage.money .pipe-without { border-top-color: rgba(255,255,255,0.25); color: #ff9b9b; }
+.loss-banner { margin-top: 16px; background: var(--rq-danger-soft); border: 1px solid var(--rq-danger); border-radius: var(--rq-radius); padding: 18px 22px; color: var(--rq-danger); display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap; }
+.loss-banner .big { font-family: var(--rq-font-numbers); font-size: 28px; font-weight: 700; }
+.loss-banner p { margin: 2px 0 0; color: var(--rq-text); }
+
+/* ---------- Calendar ---------- */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--rq-border); border-left: 1px solid var(--rq-border); }
+.cal-dow { font-size: 11.5px; font-weight: 600; color: var(--rq-text-muted); padding: 8px; border-right: 1px solid var(--rq-border); border-bottom: 1px solid var(--rq-border); background: var(--rq-surface-2); }
+.cal-day { min-height: 96px; padding: 6px; border-right: 1px solid var(--rq-border); border-bottom: 1px solid var(--rq-border); font-size: 12px; }
+.cal-day.other { background: var(--rq-surface-2); color: var(--rq-text-muted); }
+.cal-day.today .cal-num { background: var(--rq-accent); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; }
+.cal-num { font-weight: 600; margin-bottom: 4px; }
+.cal-ev { display: block; width: 100%; text-align: left; background: var(--rq-accent-soft); color: var(--rq-accent); border: none; border-radius: 5px; padding: 3px 5px; margin-bottom: 3px; font: 600 11px var(--rq-font-body); cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cal-connect { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--rq-border); }
+.cal-connect:last-child { border-bottom: none; }
+.cal-logo { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; color: #fff; flex: none; }
+
+/* ---------- Insights ---------- */
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 180px; padding-top: 10px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+.bar { width: 100%; background: var(--rq-accent); border-radius: 4px 4px 0 0; min-height: 2px; }
+.bar.peak { background: var(--rq-primary); }
+.bar-lbl { font-size: 10px; color: var(--rq-text-muted); margin-top: 4px; white-space: nowrap; }
+.bar-val { font-size: 10px; color: var(--rq-text-muted); margin-bottom: 2px; }
+.heat { display: grid; grid-template-columns: 44px repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 10px; }
+.heat .h-lbl { color: var(--rq-text-muted); display: flex; align-items: center; }
+.heat .h-cell { aspect-ratio: 1; border-radius: 3px; background: var(--rq-accent); }
+.hbar { display: grid; grid-template-columns: 180px 1fr 60px; align-items: center; gap: 10px; margin-bottom: 10px; }
+.hbar-track { height: 10px; background: var(--rq-surface-2); border-radius: 5px; overflow: hidden; }
+.hbar-fill { height: 100%; background: var(--rq-accent); }
+
+/* ---------- Cheat sheet ---------- */
+.cs-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; background: var(--rq-surface-2); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.cs-block { margin-bottom: 12px; }
+.cs-block h4 { font-family: var(--rq-font-heading); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rq-text-muted); margin: 0 0 6px; }
+.cs-list { margin: 0; padding-left: 18px; }
+.cs-list li { margin-bottom: 4px; }
+.cs-urgent { background: var(--rq-danger-soft); border-radius: 10px; padding: 12px 14px; }
+.cs-urgent h4 { color: var(--rq-danger); }
+.cs-urgent-row { padding: 6px 0; border-top: 1px solid rgba(210,59,59,0.2); }
+.cs-urgent-row:first-of-type { border-top: none; }
+.cs-never h4 { color: var(--rq-danger); }
+.cs-two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 700px) { .cs-two { grid-template-columns: 1fr; } }
+.firm-link { background: none; border: none; padding: 0; font: inherit; text-align: left; cursor: pointer; color: var(--rq-text); }
+.firm-link:hover b { color: var(--rq-accent); text-decoration: underline; }
+.cs-h { font-family: var(--rq-font-heading); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rq-text-muted); margin: 6px 0; }
+.grid > .card + .card, .grid > .stack + .stack { margin-top: 0; }
+.desk .tabs button { padding: 9px 8px; }
