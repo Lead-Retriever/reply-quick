@@ -10,10 +10,13 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import twilio from 'twilio';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const {
   PORT = 3000, DATABASE_URL, JWT_SECRET = 'dev-only-secret', APP_ORIGIN = '*', PUBLIC_URL = '',
-  TWILIO_AUTH_TOKEN,
+  TWILIO_AUTH_TOKEN, ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_NAME = 'ReplyQuick Admin',
 } = process.env;
 
 const db = new pg.Pool({ connectionString: DATABASE_URL, ssl: DATABASE_URL && !DATABASE_URL.includes('localhost') ? { rejectUnauthorized: false } : false });
@@ -21,6 +24,8 @@ const app = express();
 app.use(cors({ origin: APP_ORIGIN === '*' ? true : APP_ORIGIN.split(',') }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false })); // Twilio posts form-encoded
+
+app.get('/', (_req, res) => res.send('ReplyQuick server is running. Health check: /health'));
 
 // ---------- Health (Render health check + uptime monitor) ----------
 app.get('/health', async (_req, res) => {
@@ -112,4 +117,24 @@ app.post('/twilio/voice', twilioOnly, async (req, res) => {
   res.type('text/xml').send(vr.toString());
 });
 
-app.listen(PORT, () => console.log('ReplyQuick server listening on ' + PORT));
+// ---------- Startup: create tables and the first admin login ----------
+// Safe to run on every start: every table uses CREATE ... IF NOT EXISTS.
+async function setup() {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const schema = fs.readFileSync(path.join(here, '..', 'db', 'schema.sql'), 'utf8');
+  await db.query(schema);
+  console.log('Database tables ready');
+  if (ADMIN_EMAIL && ADMIN_PASSWORD) {
+    const { rows } = await db.query("select id from users where role = 'admin' limit 1");
+    if (!rows.length) {
+      await db.query('insert into users (email, password_hash, name, role) values ($1,$2,$3,$4)',
+        [ADMIN_EMAIL, await bcrypt.hash(ADMIN_PASSWORD, 10), ADMIN_NAME, 'admin']);
+      console.log('First admin login created for ' + ADMIN_EMAIL);
+    }
+  }
+}
+
+if (!DATABASE_URL) { console.error('DATABASE_URL is missing. Add it in Render > Environment.'); process.exit(1); }
+setup()
+  .then(() => app.listen(PORT, () => console.log('ReplyQuick server listening on ' + PORT)))
+  .catch((e) => { console.error('Startup failed:', e.message); process.exit(1); });
