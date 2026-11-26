@@ -1,12 +1,12 @@
 // ============================================================
-// ReplyQuick data store (PROTOTYPE)
+// Live Service 24/7 data store (PROTOTYPE)
 // Right now this holds demo data in the browser (localStorage) so
 // every dashboard is clickable without a server. In Phase 3 the
 // functions below get swapped for calls to /server's API; the views
 // only call these functions, so they will not need to change.
 // ============================================================
 
-const KEY = 'rq_demo_v3';
+const KEY = 'ls_demo_v5';
 const listeners = new Set();
 
 // ---------- Seeded random so demo data looks the same each reset ----------
@@ -123,15 +123,15 @@ function seed() {
   firms.forEach(f => { f.cheatSheet = CHEAT[f.id]; f.recordingEnabled = true; f.calendars = { google: null, outlook: null }; });
 
   const agents = [
-    { id: 'agent_sarah', name: 'Sarah Lopez', email: 'sarah@replyquick.demo', status: 'available', firmIds: firms.map(f => f.id), shiftStart: Date.now() - 4 * 3600000 },
-    { id: 'agent_john', name: 'John Bautista', email: 'john@replyquick.demo', status: 'on_call', firmIds: firms.map(f => f.id), shiftStart: Date.now() - 6 * 3600000 },
-    { id: 'agent_maria', name: 'Maria Santos', email: 'maria@replyquick.demo', status: 'break', firmIds: firms.map(f => f.id), shiftStart: Date.now() - 5 * 3600000 },
-    { id: 'agent_priya', name: 'Priya Nair', email: 'priya@replyquick.demo', status: 'available', firmIds: ['firm_morgan', 'firm_rivera'], shiftStart: Date.now() - 2 * 3600000 },
-    { id: 'agent_ken', name: 'Ken Ramos', email: 'ken@replyquick.demo', status: 'offline', firmIds: firms.map(f => f.id), shiftStart: null },
+    { id: 'agent_sarah', name: 'Sarah Lopez', email: 'sarah@liveservice247.demo', status: 'available', firmIds: firms.map(f => f.id), shiftStart: Date.now() - 4 * 3600000 },
+    { id: 'agent_john', name: 'John Bautista', email: 'john@liveservice247.demo', status: 'on_call', firmIds: firms.map(f => f.id), shiftStart: Date.now() - 6 * 3600000 },
+    { id: 'agent_maria', name: 'Maria Santos', email: 'maria@liveservice247.demo', status: 'break', firmIds: firms.map(f => f.id), shiftStart: Date.now() - 5 * 3600000 },
+    { id: 'agent_priya', name: 'Priya Nair', email: 'priya@liveservice247.demo', status: 'available', firmIds: ['firm_morgan', 'firm_rivera'], shiftStart: Date.now() - 2 * 3600000 },
+    { id: 'agent_ken', name: 'Ken Ramos', email: 'ken@liveservice247.demo', status: 'offline', firmIds: firms.map(f => f.id), shiftStart: null },
   ];
 
   const users = [
-    { id: 'u_admin', email: 'admin@replyquick.demo', password: 'demo', name: 'ReplyQuick Admin', role: 'admin' },
+    { id: 'u_admin', email: 'admin@liveservice247.demo', password: 'demo', name: 'Live Service Admin', role: 'admin' },
     { id: 'u_morgan', email: 'owner@morganlaw.demo', password: 'demo', name: 'Daniel Morgan', role: 'firm', firmId: 'firm_morgan' },
     { id: 'u_rivera', email: 'owner@riveralaw.demo', password: 'demo', name: 'Elena Rivera', role: 'firm', firmId: 'firm_rivera' },
     { id: 'u_chen', email: 'owner@chendefense.demo', password: 'demo', name: 'Victor Chen', role: 'firm', firmId: 'firm_chen' },
@@ -196,17 +196,30 @@ function seed() {
   // ---------- Sample activity log ----------
   const H = 3600000;
   const audit = [
-    { id: 'aud1', at: now - 2 * H, by: 'ReplyQuick Admin', action: 'Firm settings updated', detail: 'Chen Criminal Defense: transfer directory' },
-    { id: 'aud2', at: now - 5 * H, by: 'ReplyQuick Admin', action: 'Agent assignments changed', detail: 'Priya Nair: Morgan & Associates Law, Rivera Family Law' },
-    { id: 'aud3', at: now - 26 * H, by: 'ReplyQuick Admin', action: 'Recording turned on', detail: 'Rivera Family Law' },
+    { id: 'aud1', at: now - 2 * H, by: 'Live Service Admin', action: 'Firm settings updated', detail: 'Chen Criminal Defense: transfer directory' },
+    { id: 'aud2', at: now - 5 * H, by: 'Live Service Admin', action: 'Agent assignments changed', detail: 'Priya Nair: Morgan & Associates Law, Rivera Family Law' },
+    { id: 'aud3', at: now - 26 * H, by: 'Live Service Admin', action: 'Recording turned on', detail: 'Rivera Family Law' },
     { id: 'aud4', at: now - 2 * DAY, by: 'Daniel Morgan', action: 'Lead marked retained', detail: 'Morgan & Associates Law: $18,500' },
-    { id: 'aud5', at: now - 3 * DAY, by: 'ReplyQuick Admin', action: 'Account created', detail: 'ken@replyquick.demo (receptionist)' },
-    { id: 'aud6', at: now - 9 * DAY, by: 'ReplyQuick Admin', action: 'Firm activated', detail: 'Chen Criminal Defense' },
+    { id: 'aud5', at: now - 3 * DAY, by: 'Live Service Admin', action: 'Account created', detail: 'ken@liveservice247.demo (receptionist)' },
+    { id: 'aud6', at: now - 9 * DAY, by: 'Live Service Admin', action: 'Firm activated', detail: 'Chen Criminal Defense' },
   ];
   // Every demo call has a recording (recording is on for all demo firms).
   calls.forEach(c => { c.recording = true; });
 
-  return { version: 3, firms, agents, users, calls, tasks, audit, onboardingDrafts: [] };
+// ---------- Sample message conversations (receptionist inbox) ----------
+  const conversations = [];
+  const recentLeads = calls.filter(c => c.callerType === 'New inquiry').slice(0, 7);
+  recentLeads.forEach((c, i) => {
+    const firm = firms.find(f => f.id === c.firmId);
+    const email = c.callerName.toLowerCase().replace(/[^a-z]+/g, '.') + '@example.com';
+    const t = c.startedAt + c.durationSec * 1000;
+    const msgs = [{ id: 'm' + i + 'a', channel: 'sms', dir: 'out', body: 'Hi ' + c.callerName.split(' ')[0] + ', this is ' + c.agent.split(' ')[0] + ' from ' + firm.name + '. Thanks for calling today. Text us here anytime if anything else comes up. Reply STOP to opt out.', at: t + 60000, by: c.agent }];
+    if (i % 2 === 0) msgs.push({ id: 'm' + i + 'b', channel: 'sms', dir: 'in', body: 'Thank you! Do I need to bring anything to the consultation?', at: t + 25 * 60000 });
+    if (i % 3 === 0) msgs.push({ id: 'm' + i + 'c', channel: 'email', dir: 'out', subject: 'Your consultation with ' + firm.name, body: 'Hi ' + c.callerName.split(' ')[0] + ',\n\nPlease bring any paperwork or documents related to your situation. If you think of anything else, just reply to this email.\n\n' + firm.name, at: t + 40 * 60000, by: c.agent });
+    conversations.push({ id: 'conv_' + i, firmId: c.firmId, callId: c.id, name: c.callerName, phone: c.callerPhone, email, unread: i % 2 === 0 && i < 4, messages: msgs, updatedAt: msgs[msgs.length - 1].at });
+  });
+
+  return { version: 4, firms, agents, users, calls, tasks, audit, onboardingDrafts: [], conversations };
 }
 
 // ---------- Persistence ----------
@@ -257,10 +270,12 @@ export const getCalls = (firmId) => firmId ? state.calls.filter(c => c.firmId ==
 export const getTasks = (firmId) => firmId ? state.tasks.filter(t => t.firmId === firmId) : state.tasks;
 export const getAudit = () => state.audit;
 
-// Estimated share of calls a firm answers on its own without ReplyQuick.
-// Used for the "without ReplyQuick" comparison on the firm overview. Change it here.
+// Estimated share of calls a firm answers on its own without Live Service 24/7.
+// Used for the "without Live Service 24/7" comparison on the firm overview. Change it here.
 export const BASELINE_ANSWER_RATE = 0.7;
 export const getDrafts = () => state.onboardingDrafts;
+export const getConversations = (firmIds) => (state.conversations || []).filter(c => !firmIds || firmIds.includes(c.firmId)).sort((a, b) => b.updatedAt - a.updatedAt);
+export const getConversation = (id) => (state.conversations || []).find(c => c.id === id);
 
 // ---------- Writes ----------
 export function audit(action, detail) {
@@ -287,6 +302,21 @@ export function setCalendar(firmId, provider, account) {
   const f = getFirm(firmId); if (!f) return;
   f.calendars = f.calendars || {}; f.calendars[provider] = account;
   audit(account ? 'Calendar connected' : 'Calendar disconnected', f.name + ': ' + (provider === 'google' ? 'Google' : 'Outlook') + (account ? ' (' + account + ')' : '')); save();
+}
+export function startConversation({ firmId, name, phone, email, callId }) {
+  state.conversations = state.conversations || [];
+  const existing = state.conversations.find(c => c.firmId === firmId && ((phone && c.phone === phone) || (email && c.email === email)));
+  if (existing) return existing.id;
+  const conv = { id: uid('conv'), firmId, callId: callId || null, name: name || 'Unknown', phone: phone || '', email: email || '', unread: false, messages: [], updatedAt: Date.now() };
+  state.conversations.push(conv); save();
+  return conv.id;
+}
+export function updateConversation(id, patch) { const c = getConversation(id); if (c) { Object.assign(c, patch); save(); } }
+export function addMessage(convId, msg) {
+  const c = getConversation(convId); if (!c) return;
+  c.messages.push({ id: uid('msg'), at: Date.now(), ...msg });
+  c.updatedAt = Date.now(); if (msg.dir === 'in') c.unread = true;
+  save();
 }
 export function logCall(call) { state.calls.unshift(call); save(); }
 export function addTask(task) { state.tasks.unshift(task); save(); }

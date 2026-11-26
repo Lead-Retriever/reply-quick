@@ -1,4 +1,6 @@
-# ReplyQuick decisions
+# Live Service 24/7 decisions
+
+(Formerly ReplyQuick.) Domain: liveservice247.com. Website at liveservice247.com, app at app.liveservice247.com.
 
 ## Locked
 

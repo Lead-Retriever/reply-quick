@@ -37,7 +37,7 @@ const STATUS_PILL = { available: 'success', ringing: 'info', on_call: 'danger', 
 export const statusPill = (s) => '<span class="pill ' + (STATUS_PILL[s] || '') + '">' + esc(STATUS_LABEL[s] || s) + '</span>';
 
 const OUTCOME_PILL = {
-  'Consultation booked': 'success', 'Intake complete': 'info', 'Transferred': 'accent', 'Callback requested': 'warning',
+  'Consultation booked': 'dark', 'Intake complete': 'info', 'Transferred': 'accent', 'Callback requested': 'warning',
   'Message taken': '', 'Abandoned': 'danger', 'Missed': 'danger',
 };
 export const outcomePill = (o) => '<span class="pill ' + (OUTCOME_PILL[o] || '') + '">' + esc(o) + '</span>';
@@ -48,7 +48,7 @@ export function shell({ nav, active, title, subtitle, body, actions = '' }) {
   return `
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-dot">RQ</div>ReplyQuick</div>
+      <div class="brand"><span class="mark" aria-hidden="true"></span>Live Service 24/7</div>
       <nav class="nav">
         ${nav.map(n => n.label ? `<div class="side-label">${esc(n.label)}</div>` :
           `<a href="${n.href}" class="${n.href === active ? 'active' : ''}">${esc(n.text)}</a>`).join('')}

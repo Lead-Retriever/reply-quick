@@ -13,10 +13,10 @@ site/
 This is its own Cloudflare Pages project, separate from the app.
 
 1. Cloudflare dashboard, Workers & Pages, Create, Pages, Connect to Git, pick this repo.
-2. Framework preset: None. Build command: leave empty. Build output directory: `site`.
-3. Save and Deploy.
+2. Project name `liveservice247-site`. Framework preset: None. Build command: leave empty. Build output directory: `site`.
+3. Save and Deploy, then add the custom domains `liveservice247.com` and `www.liveservice247.com`.
 
-The Dashboard buttons link to `https://replyquick-app.pages.dev`. Swap to `https://app.yourdomain.com` once the domain is live.
+The Dashboard buttons link to the app at `https://app.liveservice247.com`.
 
 ## Review build
 

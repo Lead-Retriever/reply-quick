@@ -1,5 +1,5 @@
 // ============================================================
-// Admin dashboard: ReplyQuick owner. Full oversight of firms,
+// Admin dashboard: Live Service 24/7 owner. Full oversight of firms,
 // receptionists, calls and accounts, plus the Onboarding tab.
 // ============================================================
 import * as S from '../store.js';
@@ -120,7 +120,7 @@ export function mount(root, args) {
       title: 'Law firms', subtitle: 'Click a firm to edit its setup, receptionist cheat sheet and website script. Firms do not edit any of this themselves.',
       actions: '<a class="btn primary" href="#/admin/onboarding/new">Onboard a firm</a>',
       body: `<div class="card"><div class="table-wrap"><table>
-        <thead><tr><th>Firm</th><th>Practice</th><th>ReplyQuick number</th><th>Owner</th><th>Calls (7 days)</th><th>Answered</th><th>Status</th></tr></thead>
+        <thead><tr><th>Firm</th><th>Practice</th><th>Live Service number</th><th>Owner</th><th>Calls (7 days)</th><th>Answered</th><th>Status</th></tr></thead>
         <tbody>${S.getFirms().map(f => {
           const s = summarize(S.getCalls(f.id).filter(c => c.startedAt > Date.now() - 7 * 86400000));
           return `<tr class="clickable" data-firm="${f.id}"><td><b>${esc(f.name)}</b><div class="small muted">${esc(f.address)}</div></td><td>${esc(f.practice)}</td>
@@ -154,7 +154,7 @@ export function mount(root, args) {
       </div>`;
     if (firmTab === 'script') body = `<div class="card"><div class="card-head"><h3>Website script</h3><button class="btn sm" id="copyScript" type="button">Copy script</button></div><pre class="code">${esc(script)}</pre></div>`;
     if (firmTab === 'info') body = `<div class="card"><dl class="kv">
-        <dt>ReplyQuick number</dt><dd class="num">${esc(S.fmtPhone(f.rqNumber))}</dd>
+        <dt>Live Service number</dt><dd class="num">${esc(S.fmtPhone(f.rqNumber))}</dd>
         <dt>Firm's own numbers</dt><dd>${f.originalNumbers.map(S.fmtPhone).map(esc).join('<br>') || 'None'}</dd>
         <dt>Owner</dt><dd>${esc(f.contactName)}<br><span class="small muted">${esc(f.contactEmail)}</span></dd>
         <dt>Calendars</dt><dd>${['google', 'outlook'].filter(k => f.calendars && f.calendars[k]).map(k => k === 'google' ? 'Google' : 'Outlook').join(', ') || 'None connected'}</dd>
@@ -366,7 +366,7 @@ export function mount(root, args) {
     collect(d, sb);
     const problems = [];
     if (!d.firm.name) problems.push('Firm name (step 1)');
-    if (!S.toE164(d.rqNumber)) problems.push('ReplyQuick number (step 2)');
+    if (!S.toE164(d.rqNumber)) problems.push('Live Service number (step 2)');
     if (!d.greeting) problems.push('Greeting (step 3)');
     if (!d.login.email) problems.push('Owner login email (step ' + STEPS.length + ')');
     if (problems.length) { alertBox('Missing before activation: ' + problems.join(', ') + '.'); return; }
@@ -426,11 +426,11 @@ const STEP_RENDER = [
     </div>`,
 
   // 2. Phone number
-  (d) => `<h2>ReplyQuick phone number</h2>
+  (d) => `<h2>Live Service phone number</h2>
     <p class="muted">This is the number callers dial. Every call to it rings the receptionist desk with this firm's greeting and info.</p>
     <div class="form-grid">
       <label class="field"><span>Preferred area code</span><input type="text" data-d="areaCode" value="${esc(d.areaCode)}" placeholder="305" maxlength="3" /></label>
-      <label class="field"><span>ReplyQuick number for this firm</span><input type="tel" data-d="rqNumber" value="${esc(d.rqNumber)}" placeholder="(305) 555-0142" /></label>
+      <label class="field"><span>Live Service number for this firm</span><input type="tel" data-d="rqNumber" value="${esc(d.rqNumber)}" placeholder="(305) 555-0142" /></label>
     </div>
     <p class="small muted">Prototype: type the number in. In the live version this step searches Twilio for available numbers in the area code and buys the one you pick.</p>`,
 
@@ -447,7 +447,7 @@ const STEP_RENDER = [
   (d) => `<h2>Receptionist cheat sheet</h2><p class="muted">The quick-reference card receptionists see for this firm on every call. One item per line.</p>${cheatForm(d.cheatSheet)}`,
 
   // 4. Office hours
-  (d) => `<h2>Office hours</h2><p class="muted">ReplyQuick answers 24/7 regardless. Office hours only decide who can receive transfers (outside hours, only contacts marked "After hours").</p>
+  (d) => `<h2>Office hours</h2><p class="muted">We answer 24/7 regardless. Office hours only decide who can receive transfers (outside hours, only contacts marked "After hours").</p>
     <table>${DAYS.map(([k, n]) => `<tr><td style="width:130px">${n}</td>
       <td style="width:110px"><label class="check"><input type="checkbox" data-open-day="${k}" ${d.hours[k] ? 'checked' : ''}/> Open</label></td>
       <td><input type="time" data-h-open="${k}" value="${d.hours[k] ? d.hours[k].open : '09:00'}" style="max-width:140px" /> to <input type="time" data-h-close="${k}" value="${d.hours[k] ? d.hours[k].close : '17:00'}" style="max-width:140px" /></td></tr>`).join('')}</table>`,
@@ -471,7 +471,7 @@ const STEP_RENDER = [
     <dl class="kv">
       <dt>Firm</dt><dd>${esc(d.firm.name || 'Missing')}</dd>
       <dt>Practice</dt><dd>${esc(d.firm.practice)}</dd>
-      <dt>ReplyQuick number</dt><dd>${esc(S.fmtPhone(S.toE164(d.rqNumber) || '') || 'Missing')}</dd>
+      <dt>Live Service number</dt><dd>${esc(S.fmtPhone(S.toE164(d.rqNumber) || '') || 'Missing')}</dd>
       <dt>Greeting</dt><dd>"${esc(d.greeting.replace(/\{firm\}/g, d.firm.name || '[firm]'))}"</dd>
       <dt>Transfer contacts</dt><dd>${d.directory.filter(c => c.name).length}</dd>
       <dt>Website platform</dt><dd>${esc(PLATFORMS[d.website.platform].label)}</dd>
@@ -479,7 +479,7 @@ const STEP_RENDER = [
     <label class="check"><input type="checkbox" data-d="recording" ${d.recording ? 'checked' : ''}/> Record calls (callers hear "This call may be recorded" first)</label>
     <h3>Before you activate</h3>
     <ul class="checklist">
-      <li>Call the ReplyQuick number yourself and confirm it rings the receptionist desk as this firm.</li>
+      <li>Call the Live Service number yourself and confirm it rings the receptionist desk as this firm.</li>
       <li>Have a receptionist do a test transfer to one contact in the directory.</li>
       <li>Confirm the test call shows up on the firm's dashboard.</li>
     </ul>`,
@@ -517,7 +517,7 @@ function scriptFor(d) {
 function scriptOutput(d) {
   const rq = S.toE164(d.rqNumber);
   const nums = parseNumbers(d.website.numbers);
-  if (!rq) return '<div class="transfer-state failed">Add the ReplyQuick number in step 2 first.</div>';
+  if (!rq) return '<div class="transfer-state failed">Add the Live Service number in step 2 first.</div>';
   if (!nums.length && !d.website.catchAll) return '<div class="transfer-state ringing">List at least one number from their website, or check "Replace every phone number".</div>';
   const p = PLATFORMS[d.website.platform];
   const showScript = d.website.platform !== 'godaddy';

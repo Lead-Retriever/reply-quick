@@ -5,8 +5,9 @@
 // and the same screen handles a real call.
 // ============================================================
 import * as S from '../store.js';
-import { esc, toast, STATUS_LABEL, outcomePill, openPanel } from '../ui.js';
+import { esc, toast, STATUS_LABEL, outcomePill } from '../ui.js';
 import { cheatSheetHtml } from './components.js';
+import { createInbox } from './messages.js';
 
 const CALLERS = ['James Carter', 'Ana Morales', 'Unknown caller', 'Keisha Brown', 'Unknown caller', 'Luis Ortega', 'Megan Walsh'];
 const DISPOSITIONS = ['Consultation booked', 'Intake complete', 'Transferred', 'Message taken', 'Wrong number / spam'];
@@ -23,9 +24,12 @@ export function mount(root) {
     incoming: null,       // { firmId, phone, ringStart }
     call: null,           // active call details
     contextTab: 'cheat',
+    mode: 'calls',        // calls | messages
+    openFirm: null,       // expanded firm in the assigned firms accordion
     auto: false,
   };
   let autoTimer = null;
+  const inbox = createInbox(agent, () => render());
 
   const firmsFor = () => agent.firmIds.map(S.getFirm).filter(Boolean);
   const activeFirm = () => desk.call ? S.getFirm(desk.call.firmId) : desk.incoming ? S.getFirm(desk.incoming.firmId) : null;
@@ -59,7 +63,7 @@ export function mount(root) {
 
   function ring(c) {
     c.ringStart = Date.now();
-    desk.incoming = c; desk.phase = 'ringing'; desk.contextTab = 'cheat';
+    desk.incoming = c; desk.phase = 'ringing'; desk.contextTab = 'cheat'; desk.mode = 'calls';
     S.setAgentStatus(agent.id, 'ringing');
     render();
   }
@@ -134,20 +138,6 @@ export function mount(root) {
   }
   function completeWarm() { endCall(); }
 
-  // ---------- Cheat sheet (opened from the assigned firms list) ----------
-  function openCheat(firmId) {
-    const f = S.getFirm(firmId); if (!f) return;
-    openPanel(`
-      <div class="card-head"><div><div class="small muted">CHEAT SHEET</div><h2>${esc(f.name)}</h2><div class="small muted">${esc(f.practice)} · ${esc(S.firmLocalTime(f))} local · ${S.officeOpenNow(f) ? 'office open' : 'office closed'}</div></div><button class="btn sm" data-close>Close</button></div>
-      <div class="greeting-box">"${esc(greet(f))}"</div>
-      ${cheatSheetHtml(f)}
-      <h4 class="cs-h">Transfer directory</h4>
-      ${f.directory.map(c => `<div class="list-item"><div><b>${esc(c.name)}</b><div class="small muted">${esc(c.role)}</div></div><span class="small">${esc(S.fmtPhone(c.phone))}${c.afterHours ? '<br><span class="muted">after hours OK</span>' : ''}</span></div>`).join('')}
-      <h4 class="cs-h" style="margin-top:14px">FAQs</h4>
-      ${f.faqs.map(x => `<div class="list-item" style="display:block"><b>${esc(x.q)}</b><div>${esc(x.a)}</div></div>`).join('') || '<p class="muted small">None</p>'}
-      <h4 class="cs-h" style="margin-top:14px">Office hours</h4>${hoursTable(f)}`);
-  }
-
   // ---------- Rendering ----------
   function topBar() {
     const mine = S.getCalls().filter(c => c.agent === agent.name && S.isToday(c.startedAt));
@@ -155,7 +145,8 @@ export function mount(root) {
     const locked = desk.phase !== 'idle';
     return `
     <div class="desk-bar">
-      <div class="brand"><div class="brand-dot">RQ</div>ReplyQuick</div>
+      <div class="brand"><span class="mark" aria-hidden="true"></span>Live Service 24/7</div>
+      <div class="seg dark"><button data-do="mode" data-mode="calls" class="${desk.mode === 'calls' ? 'active' : ''}">Calls</button><button data-do="mode" data-mode="messages" class="${desk.mode === 'messages' ? 'active' : ''}">Messages${inbox.unreadCount() ? ' <span class="count">' + inbox.unreadCount() + '</span>' : ''}</button></div>
       <div><span class="status-dot st-${agent.status}"></span>
         <select id="statusSel" ${locked ? 'disabled' : ''} aria-label="Your status">
           ${['available', 'break', 'offline'].map(s => `<option value="${s}" ${agent.status === s ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}
@@ -249,7 +240,7 @@ export function mount(root) {
       </div>
       <div class="card">
         <div class="card-head"><h3>Your recent calls</h3></div>
-        ${mine.length ? mine.map(c => `<div class="list-item"><div><b>${esc(c.callerName)}</b> · ${esc(S.getFirm(c.firmId)?.name || '')}<div class="small muted">${esc(S.fmtDay(c.startedAt))} ${esc(S.fmtTime(c.startedAt))} · ${esc(c.reason)}</div></div>${outcomePill(c.outcome)}</div>`).join('') : '<div class="empty">No calls yet.</div>'}
+        ${mine.length ? mine.map(c => `<div class="list-item"><div><b>${esc(c.callerName)}</b> · ${esc(S.getFirm(c.firmId)?.name || '')}<div class="small muted">${esc(S.fmtDay(c.startedAt))} ${esc(S.fmtTime(c.startedAt))} · ${esc(c.reason)}</div></div><div class="btn-row" style="align-items:center;flex-wrap:nowrap">${outcomePill(c.outcome)}<button class="btn sm" data-do="msg-call" data-call="${esc(c.id)}">Message</button></div></div>`).join('') : '<div class="empty">No calls yet.</div>'}
       </div>`;
   }
 
@@ -271,8 +262,25 @@ export function mount(root) {
     const firm = activeFirm();
     if (!firm) {
       return `<div class="card"><div class="card-head"><h3>Your assigned firms</h3></div>
-        <p class="small muted" style="margin-top:0">Click a firm to study its cheat sheet before calls come in.</p>
-        ${firmsFor().map(f => `<div class="list-item"><button class="firm-link" data-do="cheat" data-firm="${f.id}"><b>${esc(f.name)}</b><div class="small muted">${esc(f.practice)} · ${esc(S.firmLocalTime(f))} local</div></button>${S.officeOpenNow(f) ? '<span class="pill success">Office open</span>' : '<span class="pill">Office closed</span>'}</div>`).join('')}
+        <p class="small muted" style="margin-top:0">Open a firm to study its cheat sheet before calls come in.</p>
+        ${firmsFor().map(f => {
+          const isOpen = desk.openFirm === f.id;
+          return `<div class="acc ${isOpen ? 'open' : ''}">
+            <button class="acc-head" data-do="acc" data-firm="${f.id}" aria-expanded="${isOpen}">
+              <div><b>${esc(f.name)}</b><div class="small muted">${esc(f.practice)} · ${esc(S.firmLocalTime(f))} local</div></div>
+              <div class="acc-right">${S.officeOpenNow(f) ? '<span class="pill success">Office open</span>' : '<span class="pill">Office closed</span>'}<span class="acc-chev">&#9662;</span></div>
+            </button>
+            ${isOpen ? `<div class="acc-body">
+              <div class="greeting-box" style="margin-top:0">"${esc(greet(f))}"</div>
+              ${cheatSheetHtml(f)}
+              <h4 class="cs-h">Transfer directory</h4>
+              ${f.directory.map(c => `<div class="list-item"><div><b>${esc(c.name)}</b><div class="small muted">${esc(c.role)}</div></div><span class="small" style="text-align:right">${esc(S.fmtPhone(c.phone))}${c.afterHours ? '<br><span class="muted">after hours OK</span>' : ''}</span></div>`).join('')}
+              <h4 class="cs-h" style="margin-top:14px">FAQs</h4>
+              ${f.faqs.map(x => `<div class="list-item" style="display:block"><b>${esc(x.q)}</b><div>${esc(x.a)}</div></div>`).join('') || '<p class="muted small">None</p>'}
+              <h4 class="cs-h" style="margin-top:14px">Office hours</h4>${hoursTable(f)}
+            </div>` : ''}
+          </div>`;
+        }).join('')}
       </div>`;
     }
     const open = S.officeOpenNow(firm);
@@ -299,9 +307,13 @@ export function mount(root) {
   }
 
   function render() {
-    const focused = document.activeElement && document.activeElement.dataset ? (document.activeElement.dataset.f || document.activeElement.dataset.w) : null;
-    root.innerHTML = `<div class="desk">${topBar()}<div class="desk-body"><div class="stack">${mainPanel()}</div><div class="stack">${contextPanel()}</div></div></div>`;
-    if (focused) { const el = root.querySelector(`[data-f="${focused}"],[data-w="${focused}"]`); if (el) { el.focus(); if (el.setSelectionRange && el.value) try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) { /* ignore */ } } }
+    const focused = document.activeElement && document.activeElement.dataset ? (document.activeElement.dataset.f || document.activeElement.dataset.w || document.activeElement.dataset.in) : null;
+    const body = desk.mode === 'messages'
+      ? `<div class="desk-body single">${inbox.html()}</div>`
+      : `<div class="desk-body"><div class="stack">${mainPanel()}</div><div class="stack">${contextPanel()}</div></div>`;
+    root.innerHTML = `<div class="desk">${topBar()}${body}</div>`;
+    if (desk.mode === 'messages') inbox.afterRender(root);
+    if (focused) { const el = root.querySelector(`[data-f="${focused}"],[data-w="${focused}"],[data-in="${focused}"]`); if (el) { el.focus(); if (el.setSelectionRange && el.value) try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) { /* ignore */ } } }
     tick();
   }
 
@@ -311,10 +323,13 @@ export function mount(root) {
 
   // ---------- Events (delegated, bound once) ----------
   function onClick(e) {
+    if (desk.mode === 'messages' && inbox.onClick(e, root)) return;
     const b = e.target.closest('[data-do]'); if (!b) return;
     const d = b.dataset.do;
     if (d === 'simulate') simulateIncoming();
-    if (d === 'cheat') openCheat(b.dataset.firm);
+    if (d === 'mode') { desk.mode = b.dataset.mode; render(); }
+    if (d === 'acc') { desk.openFirm = desk.openFirm === b.dataset.firm ? null : b.dataset.firm; render(); }
+    if (d === 'msg-call') { const c = S.getCalls().find(x => x.id === b.dataset.call); if (c) { inbox.fromCall(c); desk.mode = 'messages'; render(); } }
     if (d === 'answer') answer();
     if (d === 'mute') { desk.call.muted = !desk.call.muted; render(); }
     if (d === 'hold') { desk.call.held = !desk.call.held; render(); }
@@ -328,11 +343,13 @@ export function mount(root) {
     if (d === 'take-msg') { desk.call.transfer = null; desk.call.wrap.outcome = 'Message taken'; render(); const n = root.querySelector('[data-f="notes"]'); if (n) n.focus(); }
   }
   function onInput(e) {
+    if (desk.mode === 'messages' && inbox.onInput(e, root)) return;
     const el = e.target;
     if (el.dataset.f && desk.call) desk.call.form[el.dataset.f] = el.value;
     if (el.dataset.w && desk.call) desk.call.wrap[el.dataset.w] = el.type === 'checkbox' ? el.checked : el.value;
   }
   function onChange(e) {
+    if (desk.mode === 'messages' && inbox.onChange(e, root)) return;
     const el = e.target;
     if (el.id === 'statusSel') { S.setAgentStatus(agent.id, el.value); nextFromQueue(); render(); }
     if (el.id === 'autoSim') { desk.auto = el.checked; scheduleAuto(); }
@@ -363,5 +380,5 @@ function hoursTable(firm) {
   const names = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
   const to12 = (t) => { let [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return h + ':' + String(m).padStart(2, '0') + ' ' + ap; };
   return `<table>${Object.keys(names).map(k => `<tr><td>${names[k]}</td><td>${firm.hours[k] ? to12(firm.hours[k].open) + ' to ' + to12(firm.hours[k].close) : '<span class="muted">Closed</span>'}</td></tr>`).join('')}</table>
-  <div class="small muted" style="margin-top:8px">These are the firm's office hours. ReplyQuick answers 24/7; hours only decide who can take transfers.</div>`;
+  <div class="small muted" style="margin-top:8px">These are the firm's office hours. We answer 24/7; hours only decide who can take transfers.</div>`;
 }

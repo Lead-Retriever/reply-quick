@@ -6,7 +6,7 @@ import { esc, outcomePill, openPanel, toast } from '../ui.js';
 export const STAGES = {
   inquiry: { label: 'New lead', pill: 'info' },
   consult: { label: 'Consultation', pill: 'warning' },
-  retained: { label: 'Retained', pill: 'success' },
+  retained: { label: 'Retained', pill: 'dark' },
   not_fit: { label: 'Not a fit', pill: '' },
 };
 export const stagePill = (st) => st && STAGES[st] ? `<span class="pill ${STAGES[st].pill}">${STAGES[st].label}</span>` : '<span class="muted small">Not a lead</span>';

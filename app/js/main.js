@@ -1,5 +1,5 @@
 // ============================================================
-// ReplyQuick app entry: one login, then each account is sent to
+// Live Service 24/7 app entry: one login, then each account is sent to
 // its own dashboard based on role (admin, firm, receptionist).
 // Routes use the URL hash (#/admin/overview) so this works on
 // Cloudflare Pages with no server-side routing.

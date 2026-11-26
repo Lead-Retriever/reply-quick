@@ -1,7 +1,7 @@
 // ============================================================
 // Firm (law firm owner) dashboard. Kept deliberately simple:
 // Overview (pipeline + value), Calls, Calendar. No settings:
-// ReplyQuick handles all setup ("done for you").
+// Live Service 24/7 handles all setup ("done for you").
 // ============================================================
 import * as S from '../store.js';
 import { esc, shell, toast } from '../ui.js';
@@ -23,7 +23,7 @@ export function mount(root, args) {
 
   function render() {
     const firm = S.getFirm(firmId);
-    if (!firm) { root.innerHTML = '<div class="main"><div class="card">This login is not linked to a firm. Contact ReplyQuick support.</div></div>'; return; }
+    if (!firm) { root.innerHTML = '<div class="main"><div class="card">This login is not linked to a firm. Contact Live Service 24/7 support.</div></div>'; return; }
     const pages = { overview, calls, calendar };
     const p = (pages[page] || overview)(firm);
     root.innerHTML = shell({ nav: NAV, active: '#/firm/' + (pages[page] ? page : 'overview'), title: p.title, subtitle: p.subtitle, body: p.body, actions: p.actions || '' });
@@ -60,11 +60,11 @@ export function mount(root, args) {
             <div class="stat-label">${st.label}</div>
             <div class="pipe-value">${st.value}</div>
             <div class="stat-sub">${st.sub}</div>
-            <div class="pipe-without">Without ReplyQuick: ${st.without}</div>
+            <div class="pipe-without">Without us: ${st.without}</div>
           </div>${i < stages.length - 1 ? '<div class="pipe-arrow" aria-hidden="true">&rsaquo;</div>' : ''}`).join('')}
       </div>
       <div class="loss-banner">
-        <div><div class="small" style="font-weight:600">What you would have missed in ${rangeLabel} without ReplyQuick</div>
+        <div><div class="small" style="font-weight:600">What you would have missed in ${rangeLabel} without Live Service 24/7</div>
           <p>About <b>${missed.calls} calls</b>, <b>${missed.retained} retained clients</b> and <b>${S.fmtMoney(missed.revenue)}</b> in fees.</p></div>
         <div class="big">${S.fmtMoney(missed.revenue)}</div>
       </div>
@@ -72,7 +72,7 @@ export function mount(root, args) {
         <div class="stat"><div class="stat-label">Answered after office hours</div><div class="stat-value">${afterHours}</div><div class="stat-sub">Calls that would have gone to voicemail</div></div>
         <div class="stat"><div class="stat-label">Consultations booked by us</div><div class="stat-value">${booked}</div><div class="stat-sub">Booked on the call and added to your <a href="#/firm/calendar">calendar</a></div></div>
       </div>
-      <p class="small muted" style="margin-top:16px">"Without ReplyQuick" is an estimate that assumes your office would answer about ${Math.round(k * 100)}% of these calls on its own. Mark leads as Consultation, Retained or Not a fit in <a href="#/firm/calls">Calls</a> to keep your pipeline current.</p>`,
+      <p class="small muted" style="margin-top:16px">"Without Live Service 24/7" is an estimate that assumes your office would answer about ${Math.round(k * 100)}% of these calls on its own. Mark leads as Consultation, Retained or Not a fit in <a href="#/firm/calls">Calls</a> to keep your pipeline current.</p>`,
     };
   }
 
@@ -102,9 +102,10 @@ export function mount(root, args) {
     for (let i = 0; i < 42; i++) { const d = new Date(start); d.setDate(start.getDate() + i); cells.push(d); }
     const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
     const today = new Date();
+    // Official logo files live in app/assets (see app/assets/README.md). Until they're added, a plain letter tile shows instead.
     const connectRow = (key, name, color, letter) => `
       <div class="cal-connect">
-        <div style="display:flex;gap:12px;align-items:center"><div class="cal-logo" style="background:${color}">${letter}</div>
+        <div style="display:flex;gap:12px;align-items:center"><span class="cal-logo-wrap"><img class="cal-logo-img" src="assets/${key === 'google' ? 'google-calendar' : 'outlook'}.png" alt="${name} logo" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="cal-logo" style="background:${color};display:none">${letter}</span></span>
           <div><b>${name}</b><div class="small muted">${cal[key] ? 'Connected as ' + esc(cal[key]) : 'Not connected'}</div></div></div>
         ${cal[key] ? `<button class="btn sm" data-cal-off="${key}">Disconnect</button>` : `<button class="btn primary sm" data-cal-on="${key}">Connect</button>`}
       </div>`;
